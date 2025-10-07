@@ -20,13 +20,28 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
     subLine: '',
     machine: '',
     problem: '',
+    priority: '',
     actionTaken: '',
     rootCause: '',
     startTime: '',
     finishTime: '',
+    totalTime: '',
+    majorContribution: '',
+    majorContributionTime: '',
     attendBy: '',
+    closedBy: '',
     remark: ''
   });
+
+  const calculateTotalTime = () => {
+    if (formData.startTime && formData.finishTime) {
+      const start = new Date(`2000-01-01T${formData.startTime}`);
+      const finish = new Date(`2000-01-01T${formData.finishTime}`);
+      const diffMs = finish.getTime() - start.getTime();
+      const diffMins = Math.round(diffMs / 60000);
+      setFormData({ ...formData, totalTime: diffMins.toString() });
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,12 +136,29 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="priority">Priority <span className="text-destructive">*</span></Label>
+            <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value })}>
+              <SelectTrigger id="priority" data-testid="select-priority">
+                <SelectValue placeholder="Select priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="startTime">Start Time <span className="text-destructive">*</span></Label>
             <Input
               id="startTime"
               type="time"
               value={formData.startTime}
-              onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+              onChange={(e) => {
+                setFormData({ ...formData, startTime: e.target.value });
+                setTimeout(calculateTotalTime, 100);
+              }}
               required
               data-testid="input-start-time"
             />
@@ -138,8 +170,47 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
               id="finishTime"
               type="time"
               value={formData.finishTime}
-              onChange={(e) => setFormData({ ...formData, finishTime: e.target.value })}
+              onChange={(e) => {
+                setFormData({ ...formData, finishTime: e.target.value });
+                setTimeout(calculateTotalTime, 100);
+              }}
               data-testid="input-finish-time"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="totalTime">Total Time (minutes)</Label>
+            <Input
+              id="totalTime"
+              type="text"
+              value={formData.totalTime}
+              disabled
+              className="bg-muted"
+              data-testid="input-total-time"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="majorContribution">Major Contribution in BD</Label>
+            <Input
+              id="majorContribution"
+              type="text"
+              value={formData.majorContribution}
+              onChange={(e) => setFormData({ ...formData, majorContribution: e.target.value })}
+              placeholder="Describe major contribution"
+              data-testid="input-major-contribution"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="majorContributionTime">Major Contribution Time (minutes)</Label>
+            <Input
+              id="majorContributionTime"
+              type="number"
+              value={formData.majorContributionTime}
+              onChange={(e) => setFormData({ ...formData, majorContributionTime: e.target.value })}
+              placeholder="Time in minutes"
+              data-testid="input-major-contribution-time"
             />
           </div>
 
@@ -147,6 +218,20 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
             <Label htmlFor="attendBy">Attended By <span className="text-destructive">*</span></Label>
             <Select value={formData.attendBy} onValueChange={(value) => setFormData({ ...formData, attendBy: value })}>
               <SelectTrigger id="attendBy" data-testid="select-attend-by">
+                <SelectValue placeholder="Select employee" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="emp1">John Doe</SelectItem>
+                <SelectItem value="emp2">Jane Smith</SelectItem>
+                <SelectItem value="emp3">Mike Johnson</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="closedBy">Closed By</Label>
+            <Select value={formData.closedBy} onValueChange={(value) => setFormData({ ...formData, closedBy: value })}>
+              <SelectTrigger id="closedBy" data-testid="select-closed-by">
                 <SelectValue placeholder="Select employee" />
               </SelectTrigger>
               <SelectContent>
