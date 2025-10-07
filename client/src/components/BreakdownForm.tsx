@@ -37,6 +37,22 @@ interface PreventiveActionEntry {
   evidence2: string;
 }
 
+interface ProblemDescriptionEntry {
+  description: string;
+  why1: string;
+  check1: string;
+  why2: string;
+  check2: string;
+  why3: string;
+  check3: string;
+  why4: string;
+  check4: string;
+  why5: string;
+  check5: string;
+  category: string;
+  correctiveAction: string;
+}
+
 export default function BreakdownForm({ onSubmit, onCancel, initialData }: BreakdownFormProps) {
   const [formData, setFormData] = useState({
     date: '',
@@ -63,19 +79,6 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
     capaWhatHappened: '',
     capaFailureMode: '',
     capaSketch: '',
-    capaProblemDescription: '',
-    capaWhy1: '',
-    capaWhy1Check: '',
-    capaWhy2: '',
-    capaWhy2Check: '',
-    capaWhy3: '',
-    capaWhy3Check: '',
-    capaWhy4: '',
-    capaWhy4Check: '',
-    capaWhy5: '',
-    capaWhy5Check: '',
-    capa4M: '',
-    capaCorrectiveAction: '',
     capaPreventiveAction: '',
     capaCountermeasures: '',
     capaEvidenceBefore: '',
@@ -84,6 +87,10 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
     capaCheckedBy: '',
     capaReviewedBy: ''
   });
+
+  const [problemDescriptions, setProblemDescriptions] = useState<ProblemDescriptionEntry[]>([
+    { description: '', why1: '', check1: '', why2: '', check2: '', why3: '', check3: '', why4: '', check4: '', why5: '', check5: '', category: '', correctiveAction: '' }
+  ]);
 
   const [preventiveActions, setPreventiveActions] = useState<PreventiveActionEntry[]>([
     { description: '', byWhom: '', action: '', evidence1: '', evidence2: '' }
@@ -121,19 +128,6 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
         capaWhatHappened: initialData.capaWhatHappened || '',
         capaFailureMode: initialData.capaFailureMode || '',
         capaSketch: initialData.capaSketch || '',
-        capaProblemDescription: initialData.capaProblemDescription || '',
-        capaWhy1: initialData.capaWhy1 || '',
-        capaWhy1Check: initialData.capaWhy1Check || '',
-        capaWhy2: initialData.capaWhy2 || '',
-        capaWhy2Check: initialData.capaWhy2Check || '',
-        capaWhy3: initialData.capaWhy3 || '',
-        capaWhy3Check: initialData.capaWhy3Check || '',
-        capaWhy4: initialData.capaWhy4 || '',
-        capaWhy4Check: initialData.capaWhy4Check || '',
-        capaWhy5: initialData.capaWhy5 || '',
-        capaWhy5Check: initialData.capaWhy5Check || '',
-        capa4M: initialData.capa4M || '',
-        capaCorrectiveAction: initialData.capaCorrectiveAction || '',
         capaPreventiveAction: initialData.capaPreventiveAction || '',
         capaCountermeasures: initialData.capaCountermeasures || '',
         capaEvidenceBefore: initialData.capaEvidenceBefore || '',
@@ -142,6 +136,15 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
         capaCheckedBy: initialData.capaCheckedBy || '',
         capaReviewedBy: initialData.capaReviewedBy || ''
       });
+      
+      if (initialData.capaProblemDescriptions) {
+        try {
+          const parsedProblems = JSON.parse(initialData.capaProblemDescriptions);
+          setProblemDescriptions(parsedProblems);
+        } catch {
+          setProblemDescriptions([{ description: '', why1: '', check1: '', why2: '', check2: '', why3: '', check3: '', why4: '', check4: '', why5: '', check5: '', category: '', correctiveAction: '' }]);
+        }
+      }
       
       if (initialData.capaPreventiveActions) {
         try {
@@ -172,12 +175,29 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
 
   const isCapaComplete = () => {
     if (!isCapaRequired) return true;
+    const firstProblem = problemDescriptions[0];
     return !!(
-      formData.capaWhy1 &&
-      formData.capaCorrectiveAction &&
+      firstProblem.why1 &&
+      firstProblem.correctiveAction &&
       formData.capaPreventiveAction &&
       formData.capaPreparedBy
     );
+  };
+
+  const addProblemDescription = () => {
+    setProblemDescriptions([...problemDescriptions, { description: '', why1: '', check1: '', why2: '', check2: '', why3: '', check3: '', why4: '', check4: '', why5: '', check5: '', category: '', correctiveAction: '' }]);
+  };
+
+  const removeProblemDescription = (index: number) => {
+    if (problemDescriptions.length > 1) {
+      setProblemDescriptions(problemDescriptions.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateProblemDescription = (index: number, field: keyof ProblemDescriptionEntry, value: string) => {
+    const updated = [...problemDescriptions];
+    updated[index][field] = value;
+    setProblemDescriptions(updated);
   };
 
   const addPreventiveAction = () => {
@@ -211,6 +231,7 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
       subLineId: formData.subLineId || null,
       closedById: formData.closedById || null,
       capaRequired: isCapaRequired ? 'yes' : 'no',
+      capaProblemDescriptions: JSON.stringify(problemDescriptions),
       capaPreventiveActions: JSON.stringify(preventiveActions),
     };
     
@@ -520,88 +541,124 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
             </div>
 
             <div className="space-y-4 mb-6">
-              <h4 className="font-medium">Problem Description</h4>
-              <div className="space-y-2">
-                <Textarea
-                  id="capaProblemDescription"
-                  value={formData.capaProblemDescription}
-                  onChange={(e) => setFormData({ ...formData, capaProblemDescription: e.target.value })}
-                  placeholder="Describe the problem in detail"
-                  rows={2}
-                  data-testid="textarea-capa-problem"
-                />
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium">Problem Description & Five Whys Analysis</h4>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm"
+                  onClick={addProblemDescription}
+                  data-testid="button-add-problem-description"
+                >
+                  Add More
+                </Button>
               </div>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              <h4 className="font-medium">Five Whys Analysis</h4>
-              {[1, 2, 3, 4, 5].map((num) => (
-                <div key={num} className="grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
-                  <div className="md:col-span-5 space-y-2">
-                    <Label htmlFor={`capaWhy${num}`}>
-                      Why ({num}) {num === 1 && <span className="text-destructive">*</span>}
-                    </Label>
-                    <Input
-                      id={`capaWhy${num}`}
-                      value={formData[`capaWhy${num}` as keyof typeof formData] as string}
-                      onChange={(e) => setFormData({ ...formData, [`capaWhy${num}`]: e.target.value })}
-                      placeholder={`Why ${num}...`}
-                      data-testid={`input-capa-why${num}`}
-                    />
+              
+              {problemDescriptions.map((problem, index) => (
+                <Card key={index} className="p-4 relative">
+                  {problemDescriptions.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute top-2 right-2"
+                      onClick={() => removeProblemDescription(index)}
+                      data-testid={`button-remove-problem-${index}`}
+                    >
+                      ✕
+                    </Button>
+                  )}
+                  
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor={`problemDesc-${index}`}>
+                        Problem Description {index === 0 && <span className="text-destructive">*</span>}
+                      </Label>
+                      <Textarea
+                        id={`problemDesc-${index}`}
+                        value={problem.description}
+                        onChange={(e) => updateProblemDescription(index, 'description', e.target.value)}
+                        placeholder="Describe the problem in detail"
+                        rows={2}
+                        data-testid={`textarea-problem-desc-${index}`}
+                      />
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <h5 className="text-sm font-medium">Five Whys</h5>
+                      {[1, 2, 3, 4, 5].map((num) => (
+                        <div key={num} className="grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
+                          <div className="md:col-span-5 space-y-2">
+                            <Label htmlFor={`why${num}-${index}`}>
+                              Why ({num}) {num === 1 && index === 0 && <span className="text-destructive">*</span>}
+                            </Label>
+                            <Input
+                              id={`why${num}-${index}`}
+                              value={problem[`why${num}` as keyof ProblemDescriptionEntry] as string}
+                              onChange={(e) => updateProblemDescription(index, `why${num}` as keyof ProblemDescriptionEntry, e.target.value)}
+                              placeholder={`Why ${num}...`}
+                              data-testid={`input-why${num}-${index}`}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`check${num}-${index}`}>Check</Label>
+                            <Input
+                              id={`check${num}-${index}`}
+                              value={problem[`check${num}` as keyof ProblemDescriptionEntry] as string}
+                              onChange={(e) => updateProblemDescription(index, `check${num}` as keyof ProblemDescriptionEntry, e.target.value)}
+                              placeholder="✓"
+                              data-testid={`input-check${num}-${index}`}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor={`category-${index}`}>Category (4M)</Label>
+                      <Select 
+                        value={problem.category} 
+                        onValueChange={(value) => updateProblemDescription(index, 'category', value)}
+                      >
+                        <SelectTrigger id={`category-${index}`} data-testid={`select-category-${index}`}>
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CATEGORIES.map((cat) => (
+                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor={`correctiveAction-${index}`}>
+                        Corrective Action {index === 0 && <span className="text-destructive">*</span>}
+                      </Label>
+                      <Textarea
+                        id={`correctiveAction-${index}`}
+                        value={problem.correctiveAction}
+                        onChange={(e) => updateProblemDescription(index, 'correctiveAction', e.target.value)}
+                        placeholder="Immediate corrective action taken"
+                        rows={3}
+                        data-testid={`textarea-corrective-${index}`}
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor={`capaWhy${num}Check`}>Check</Label>
-                    <Input
-                      id={`capaWhy${num}Check`}
-                      value={formData[`capaWhy${num}Check` as keyof typeof formData] as string}
-                      onChange={(e) => setFormData({ ...formData, [`capaWhy${num}Check`]: e.target.value })}
-                      placeholder="✓"
-                      data-testid={`input-capa-why${num}-check`}
-                    />
-                  </div>
-                </div>
+                </Card>
               ))}
             </div>
 
-            <div className="space-y-4 mb-6">
-              <div className="space-y-2">
-                <Label htmlFor="capa4M">Category (4M)</Label>
-                <Select value={formData.capa4M} onValueChange={(value) => setFormData({ ...formData, capa4M: value })}>
-                  <SelectTrigger id="capa4M" data-testid="select-capa-category">
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map((cat) => (
-                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <div className="space-y-2">
-                <Label htmlFor="capaCorrectiveAction">Corrective Action <span className="text-destructive">*</span></Label>
-                <Textarea
-                  id="capaCorrectiveAction"
-                  value={formData.capaCorrectiveAction}
-                  onChange={(e) => setFormData({ ...formData, capaCorrectiveAction: e.target.value })}
-                  placeholder="Immediate corrective action taken"
-                  rows={3}
-                  data-testid="textarea-capa-corrective"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="capaPreventiveAction">Preventive Action <span className="text-destructive">*</span></Label>
-                <Textarea
-                  id="capaPreventiveAction"
-                  value={formData.capaPreventiveAction}
-                  onChange={(e) => setFormData({ ...formData, capaPreventiveAction: e.target.value })}
-                  placeholder="Preventive action to avoid recurrence"
-                  rows={3}
-                  data-testid="textarea-capa-preventive"
-                />
-              </div>
+            <div className="space-y-2 mb-6">
+              <Label htmlFor="capaPreventiveAction">Preventive Action <span className="text-destructive">*</span></Label>
+              <Textarea
+                id="capaPreventiveAction"
+                value={formData.capaPreventiveAction}
+                onChange={(e) => setFormData({ ...formData, capaPreventiveAction: e.target.value })}
+                placeholder="Preventive action to avoid recurrence"
+                rows={3}
+                data-testid="textarea-capa-preventive"
+              />
             </div>
 
             <div className="space-y-2 mb-6">
