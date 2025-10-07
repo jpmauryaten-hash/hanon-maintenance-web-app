@@ -120,7 +120,15 @@ export default function AppSidebar({ role = "admin", userName = "Admin User" }: 
           </div>
         </div>
         <SidebarMenuButton asChild data-testid="button-logout">
-          <a href="#" onClick={(e) => { e.preventDefault(); console.log('Logout clicked'); }}>
+          <a href="#" onClick={async (e) => { 
+            e.preventDefault(); 
+            try {
+              await fetch('/api/auth/logout', { method: 'POST' });
+              window.location.href = '/login';
+            } catch (error) {
+              console.error('Logout failed:', error);
+            }
+          }}>
             <LogOut className="h-4 w-4" />
             <span>Logout</span>
           </a>
