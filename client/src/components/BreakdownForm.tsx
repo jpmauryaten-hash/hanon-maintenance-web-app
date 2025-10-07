@@ -17,6 +17,18 @@ interface BreakdownFormProps {
   initialData?: any;
 }
 
+const CATEGORIES = [
+  "1. Design faults",
+  "2. Lack of preventive maint.",
+  "3. Previous quick fix",
+  "4. Incorrect prod. operation",
+  "5. Spare part quality/availability",
+  "6. Lack of AM",
+  "7. Improvement or modification untested",
+  "8. Lack of CBM",
+  "9. Part life span not predicted"
+];
+
 export default function BreakdownForm({ onSubmit, onCancel, initialData }: BreakdownFormProps) {
   const [formData, setFormData] = useState({
     date: '',
@@ -36,7 +48,31 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
     attendById: '',
     closedById: '',
     remark: '',
-    status: 'open'
+    status: 'open',
+    // CAPA fields
+    capaOperator: '',
+    capaMaintenance: '',
+    capaProblemDescription: '',
+    capaFailureMode: '',
+    capaWhy1: '',
+    capaWhy1Check: '',
+    capaWhy2: '',
+    capaWhy2Check: '',
+    capaWhy3: '',
+    capaWhy3Check: '',
+    capaWhy4: '',
+    capaWhy4Check: '',
+    capaWhy5: '',
+    capaWhy5Check: '',
+    capa4M: '',
+    capaCorrectiveAction: '',
+    capaPreventiveAction: '',
+    capaCountermeasures: '',
+    capaEvidenceBefore: '',
+    capaEvidenceAfter: '',
+    capaPreparedBy: '',
+    capaCheckedBy: '',
+    capaReviewedBy: ''
   });
 
   const { data: lines = [] } = useQuery<any[]>({ queryKey: ["/api/lines"] });
@@ -65,7 +101,30 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
         attendById: initialData.attendById || '',
         closedById: initialData.closedById || '',
         remark: initialData.remark || '',
-        status: initialData.status || 'open'
+        status: initialData.status || 'open',
+        capaOperator: initialData.capaOperator || '',
+        capaMaintenance: initialData.capaMaintenance || '',
+        capaProblemDescription: initialData.capaProblemDescription || '',
+        capaFailureMode: initialData.capaFailureMode || '',
+        capaWhy1: initialData.capaWhy1 || '',
+        capaWhy1Check: initialData.capaWhy1Check || '',
+        capaWhy2: initialData.capaWhy2 || '',
+        capaWhy2Check: initialData.capaWhy2Check || '',
+        capaWhy3: initialData.capaWhy3 || '',
+        capaWhy3Check: initialData.capaWhy3Check || '',
+        capaWhy4: initialData.capaWhy4 || '',
+        capaWhy4Check: initialData.capaWhy4Check || '',
+        capaWhy5: initialData.capaWhy5 || '',
+        capaWhy5Check: initialData.capaWhy5Check || '',
+        capa4M: initialData.capa4M || '',
+        capaCorrectiveAction: initialData.capaCorrectiveAction || '',
+        capaPreventiveAction: initialData.capaPreventiveAction || '',
+        capaCountermeasures: initialData.capaCountermeasures || '',
+        capaEvidenceBefore: initialData.capaEvidenceBefore || '',
+        capaEvidenceAfter: initialData.capaEvidenceAfter || '',
+        capaPreparedBy: initialData.capaPreparedBy || '',
+        capaCheckedBy: initialData.capaCheckedBy || '',
+        capaReviewedBy: initialData.capaReviewedBy || ''
       });
     }
   }, [initialData]);
@@ -76,7 +135,7 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
       const finish = new Date(`2000-01-01T${formData.finishTime}`);
       const diffMs = finish.getTime() - start.getTime();
       const diffMins = Math.round(diffMs / 60000);
-      setFormData({ ...formData, totalMinutes: diffMins });
+      setFormData({ ...formData, totalMinutes: diffMins.toString() });
     }
   };
 
@@ -84,15 +143,33 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
     calculateTotalTime();
   }, [formData.startTime, formData.finishTime]);
 
+  const isCapaRequired = formData.priority === 'High' && parseInt(formData.totalMinutes || '0') >= 45;
+
+  const isCapaComplete = () => {
+    if (!isCapaRequired) return true;
+    return !!(
+      formData.capaWhy1 &&
+      formData.capaCorrectiveAction &&
+      formData.capaPreventiveAction &&
+      formData.capaPreparedBy
+    );
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (formData.status === 'closed' && isCapaRequired && !isCapaComplete()) {
+      alert('CAPA sheet must be completed before closing this breakdown (Priority: High, Time: ≥45 min)');
+      return;
+    }
+
     const submitData = {
       ...formData,
       totalMinutes: formData.totalMinutes ? parseInt(formData.totalMinutes) : null,
       majorContributionTime: formData.majorContributionTime ? parseInt(formData.majorContributionTime) : null,
       subLineId: formData.subLineId || null,
       closedById: formData.closedById || null,
+      capaRequired: isCapaRequired ? 'yes' : 'no',
     };
     
     onSubmit?.(submitData);
@@ -337,6 +414,200 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
             data-testid="textarea-remark"
           />
         </div>
+
+        {isCapaRequired && (
+          <Card className="p-6 bg-card border-2 border-primary/20">
+            <h3 className="text-lg font-semibold mb-4 text-primary">FIVE WHY ANALYSIS (CAPA Required)</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="space-y-2">
+                <Label htmlFor="capaOperator">Operator <span className="text-destructive">*</span></Label>
+                <Input
+                  id="capaOperator"
+                  value={formData.capaOperator}
+                  onChange={(e) => setFormData({ ...formData, capaOperator: e.target.value })}
+                  placeholder="Enter operator name"
+                  data-testid="input-capa-operator"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="capaMaintenance">Maintenance <span className="text-destructive">*</span></Label>
+                <Input
+                  id="capaMaintenance"
+                  value={formData.capaMaintenance}
+                  onChange={(e) => setFormData({ ...formData, capaMaintenance: e.target.value })}
+                  placeholder="Enter maintenance personnel"
+                  data-testid="input-capa-maintenance"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div className="space-y-2">
+                <Label htmlFor="capaProblemDescription">Problem Description</Label>
+                <Textarea
+                  id="capaProblemDescription"
+                  value={formData.capaProblemDescription}
+                  onChange={(e) => setFormData({ ...formData, capaProblemDescription: e.target.value })}
+                  placeholder="What happened and where"
+                  rows={2}
+                  data-testid="textarea-capa-problem"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="capaFailureMode">Failure Mode</Label>
+                <Input
+                  id="capaFailureMode"
+                  value={formData.capaFailureMode}
+                  onChange={(e) => setFormData({ ...formData, capaFailureMode: e.target.value })}
+                  placeholder="Describe failure mode"
+                  data-testid="input-capa-failure"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <h4 className="font-medium">Five Whys Analysis</h4>
+              {[1, 2, 3, 4, 5].map((num) => (
+                <div key={num} className="grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
+                  <div className="md:col-span-5 space-y-2">
+                    <Label htmlFor={`capaWhy${num}`}>
+                      Why ({num}) {num === 1 && <span className="text-destructive">*</span>}
+                    </Label>
+                    <Input
+                      id={`capaWhy${num}`}
+                      value={formData[`capaWhy${num}` as keyof typeof formData] as string}
+                      onChange={(e) => setFormData({ ...formData, [`capaWhy${num}`]: e.target.value })}
+                      placeholder={`Why ${num}...`}
+                      data-testid={`input-capa-why${num}`}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`capaWhy${num}Check`}>Check</Label>
+                    <Input
+                      id={`capaWhy${num}Check`}
+                      value={formData[`capaWhy${num}Check` as keyof typeof formData] as string}
+                      onChange={(e) => setFormData({ ...formData, [`capaWhy${num}Check`]: e.target.value })}
+                      placeholder="✓"
+                      data-testid={`input-capa-why${num}-check`}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div className="space-y-2">
+                <Label htmlFor="capa4M">Category (4M)</Label>
+                <Select value={formData.capa4M} onValueChange={(value) => setFormData({ ...formData, capa4M: value })}>
+                  <SelectTrigger id="capa4M" data-testid="select-capa-category">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map((cat) => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="space-y-2">
+                <Label htmlFor="capaCorrectiveAction">Corrective Action <span className="text-destructive">*</span></Label>
+                <Textarea
+                  id="capaCorrectiveAction"
+                  value={formData.capaCorrectiveAction}
+                  onChange={(e) => setFormData({ ...formData, capaCorrectiveAction: e.target.value })}
+                  placeholder="Immediate corrective action taken"
+                  rows={3}
+                  data-testid="textarea-capa-corrective"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="capaPreventiveAction">Preventive Action <span className="text-destructive">*</span></Label>
+                <Textarea
+                  id="capaPreventiveAction"
+                  value={formData.capaPreventiveAction}
+                  onChange={(e) => setFormData({ ...formData, capaPreventiveAction: e.target.value })}
+                  placeholder="Preventive action to avoid recurrence"
+                  rows={3}
+                  data-testid="textarea-capa-preventive"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2 mb-6">
+              <Label htmlFor="capaCountermeasures">Countermeasures</Label>
+              <Textarea
+                id="capaCountermeasures"
+                value={formData.capaCountermeasures}
+                onChange={(e) => setFormData({ ...formData, capaCountermeasures: e.target.value })}
+                placeholder="Describe countermeasures"
+                rows={2}
+                data-testid="textarea-capa-countermeasures"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="space-y-2">
+                <Label htmlFor="capaEvidenceBefore">Evidence Before</Label>
+                <Textarea
+                  id="capaEvidenceBefore"
+                  value={formData.capaEvidenceBefore}
+                  onChange={(e) => setFormData({ ...formData, capaEvidenceBefore: e.target.value })}
+                  placeholder="Evidence before corrective action"
+                  rows={2}
+                  data-testid="textarea-capa-evidence-before"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="capaEvidenceAfter">Evidence After</Label>
+                <Textarea
+                  id="capaEvidenceAfter"
+                  value={formData.capaEvidenceAfter}
+                  onChange={(e) => setFormData({ ...formData, capaEvidenceAfter: e.target.value })}
+                  placeholder="Evidence after corrective action"
+                  rows={2}
+                  data-testid="textarea-capa-evidence-after"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="capaPreparedBy">Prepared By <span className="text-destructive">*</span></Label>
+                <Input
+                  id="capaPreparedBy"
+                  value={formData.capaPreparedBy}
+                  onChange={(e) => setFormData({ ...formData, capaPreparedBy: e.target.value })}
+                  placeholder="Name"
+                  data-testid="input-capa-prepared-by"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="capaCheckedBy">Checked By</Label>
+                <Input
+                  id="capaCheckedBy"
+                  value={formData.capaCheckedBy}
+                  onChange={(e) => setFormData({ ...formData, capaCheckedBy: e.target.value })}
+                  placeholder="Name"
+                  data-testid="input-capa-checked-by"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="capaReviewedBy">Reviewed By</Label>
+                <Input
+                  id="capaReviewedBy"
+                  value={formData.capaReviewedBy}
+                  onChange={(e) => setFormData({ ...formData, capaReviewedBy: e.target.value })}
+                  placeholder="Name"
+                  data-testid="input-capa-reviewed-by"
+                />
+              </div>
+            </div>
+          </Card>
+        )}
 
         <div className="flex gap-4 justify-end">
           {onCancel && (
