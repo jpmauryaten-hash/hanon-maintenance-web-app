@@ -18,15 +18,15 @@ interface BreakdownFormProps {
 }
 
 const CATEGORIES = [
-  "1. Design faults",
-  "2. Lack of preventive maint.",
-  "3. Previous quick fix",
-  "4. Incorrect prod. operation",
-  "5. Spare part quality/availability",
-  "6. Lack of AM",
-  "7. Improvement or modification untested",
-  "8. Lack of CBM",
-  "9. Part life span not predicted"
+  "Design faults",
+  "Lack of preventive maint.",
+  "Previous quick fix",
+  "Incorrect prod. operation",
+  "Spare part quality/availability",
+  "Lack of AM",
+  "Improvement or modification untested",
+  "Lack of CBM",
+  "Part life span not predicted"
 ];
 
 interface RootCauseEntry {
@@ -730,13 +730,19 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
                     
                     <div className="space-y-2">
                       <Label htmlFor={`rcCategory-${index}`}>Cat.(*)</Label>
-                      <Input
-                        id={`rcCategory-${index}`}
-                        value={rootCause.category}
-                        onChange={(e) => updateRootCause(index, 'category', e.target.value)}
-                        placeholder="Enter category"
-                        data-testid={`input-rc-category-${index}`}
-                      />
+                      <Select 
+                        value={rootCause.category} 
+                        onValueChange={(value) => updateRootCause(index, 'category', value)}
+                      >
+                        <SelectTrigger id={`rcCategory-${index}`} data-testid={`select-rc-category-${index}`}>
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CATEGORIES.map((cat) => (
+                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     
                     <div className="space-y-2">
