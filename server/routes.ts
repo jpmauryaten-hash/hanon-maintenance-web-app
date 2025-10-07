@@ -5,6 +5,7 @@ import { passport, isAuthenticated, hasRole } from "./auth";
 import { users, breakdowns, lines, subLines, machines, problemTypes, employees } from "@shared/schema";
 import { insertBreakdownSchema } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import bcrypt from "bcrypt";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Helper to sanitize user object (remove password)
@@ -74,6 +75,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(allEmployees);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch employees" });
+    }
+  });
+
+  // User Management Routes
+  app.get("/api/users", isAuthenticated, hasRole("Admin"), async (req, res) => {
+    try {
+      const allUsers = await db.select({
+        id: users.id,
+        username: users.username,
+        name: users.name,
+        email: users.email,
+        role: users.role
+      }).from(users);
+      res.json(allUsers);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  app.post("/api/users", isAuthenticated, hasRole("Admin"), async (req, res) => {
+    try {
+      const { username, password, name, email, role } = req.body;
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const [user] = await db.insert(users).values({ 
+        username, 
+        password: hashedPassword, 
+        name, 
+        email, 
+        role 
+      }).returning({
+        id: users.id,
+        username: users.username,
+        name: users.name,
+        email: users.email,
+        role: users.role
+      });
+      res.json(user);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to create user" });
+    }
+  });
+
+  app.put("/api/users/:id", isAuthenticated, hasRole("Admin"), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { username, password, name, email, role } = req.body;
+      
+      const updateData: any = { username, name, email, role };
+      if (password) {
+        updateData.password = await bcrypt.hash(password, 10);
+      }
+      
+      const [user] = await db.update(users)
+        .set(updateData)
+        .where(eq(users.id, id))
+        .returning({
+          id: users.id,
+          username: users.username,
+          name: users.name,
+          email: users.email,
+          role: users.role
+        });
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json(user);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update user" });
+    }
+  });
+
+  app.delete("/api/users/:id", isAuthenticated, hasRole("Admin"), async (req, res) => {
+    try {
+      const { id } = req.params;
+      await db.delete(users).where(eq(users.id, id));
+      res.json({ message: "User deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete user" });
     }
   });
 
