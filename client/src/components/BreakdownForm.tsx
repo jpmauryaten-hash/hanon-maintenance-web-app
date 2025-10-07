@@ -51,6 +51,7 @@ interface ProblemDescriptionEntry {
   check5: string;
   category: string;
   correctiveAction: string;
+  preventiveAction: string;
 }
 
 export default function BreakdownForm({ onSubmit, onCancel, initialData }: BreakdownFormProps) {
@@ -89,7 +90,7 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
   });
 
   const [problemDescriptions, setProblemDescriptions] = useState<ProblemDescriptionEntry[]>([
-    { description: '', why1: '', check1: '', why2: '', check2: '', why3: '', check3: '', why4: '', check4: '', why5: '', check5: '', category: '', correctiveAction: '' }
+    { description: '', why1: '', check1: '', why2: '', check2: '', why3: '', check3: '', why4: '', check4: '', why5: '', check5: '', category: '', correctiveAction: '', preventiveAction: '' }
   ]);
 
   const [preventiveActions, setPreventiveActions] = useState<PreventiveActionEntry[]>([
@@ -142,7 +143,7 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
           const parsedProblems = JSON.parse(initialData.capaProblemDescriptions);
           setProblemDescriptions(parsedProblems);
         } catch {
-          setProblemDescriptions([{ description: '', why1: '', check1: '', why2: '', check2: '', why3: '', check3: '', why4: '', check4: '', why5: '', check5: '', category: '', correctiveAction: '' }]);
+          setProblemDescriptions([{ description: '', why1: '', check1: '', why2: '', check2: '', why3: '', check3: '', why4: '', check4: '', why5: '', check5: '', category: '', correctiveAction: '', preventiveAction: '' }]);
         }
       }
       
@@ -185,7 +186,7 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
   };
 
   const addProblemDescription = () => {
-    setProblemDescriptions([...problemDescriptions, { description: '', why1: '', check1: '', why2: '', check2: '', why3: '', check3: '', why4: '', check4: '', why5: '', check5: '', category: '', correctiveAction: '' }]);
+    setProblemDescriptions([...problemDescriptions, { description: '', why1: '', check1: '', why2: '', check2: '', why3: '', check3: '', why4: '', check4: '', why5: '', check5: '', category: '', correctiveAction: '', preventiveAction: '' }]);
   };
 
   const removeProblemDescription = (index: number) => {
@@ -631,18 +632,31 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
                       </Select>
                     </div>
                     
-                    <div className="space-y-2">
-                      <Label htmlFor={`correctiveAction-${index}`}>
-                        Corrective Action {index === 0 && <span className="text-destructive">*</span>}
-                      </Label>
-                      <Textarea
-                        id={`correctiveAction-${index}`}
-                        value={problem.correctiveAction}
-                        onChange={(e) => updateProblemDescription(index, 'correctiveAction', e.target.value)}
-                        placeholder="Immediate corrective action taken"
-                        rows={3}
-                        data-testid={`textarea-corrective-${index}`}
-                      />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor={`correctiveAction-${index}`}>
+                          Corrective Action {index === 0 && <span className="text-destructive">*</span>}
+                        </Label>
+                        <Textarea
+                          id={`correctiveAction-${index}`}
+                          value={problem.correctiveAction}
+                          onChange={(e) => updateProblemDescription(index, 'correctiveAction', e.target.value)}
+                          placeholder="Immediate corrective action taken"
+                          rows={3}
+                          data-testid={`textarea-corrective-${index}`}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`preventiveAction-${index}`}>Preventive Action</Label>
+                        <Textarea
+                          id={`preventiveAction-${index}`}
+                          value={problem.preventiveAction}
+                          onChange={(e) => updateProblemDescription(index, 'preventiveAction', e.target.value)}
+                          placeholder="Preventive action for this problem"
+                          rows={3}
+                          data-testid={`textarea-preventive-${index}`}
+                        />
+                      </div>
                     </div>
                   </div>
                 </Card>
