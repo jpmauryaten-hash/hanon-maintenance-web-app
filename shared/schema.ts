@@ -65,6 +65,13 @@ export const breakdowns = pgTable("breakdowns", {
   closedById: varchar("closed_by_id").references(() => employees.id),
   remark: text("remark"),
   status: text("status").notNull().default("open"), // open, closed, pending
+  // CAPA fields - activated when priority=High and totalMinutes>=45
+  capaRequired: text("capa_required").default("no"), // yes, no
+  capaCorrectiveAction: text("capa_corrective_action"),
+  capaPreventiveAction: text("capa_preventive_action"),
+  capaCompletedById: varchar("capa_completed_by_id").references(() => employees.id),
+  capaCompletionDate: text("capa_completion_date"),
+  capaVerification: text("capa_verification"),
   createdById: varchar("created_by_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
