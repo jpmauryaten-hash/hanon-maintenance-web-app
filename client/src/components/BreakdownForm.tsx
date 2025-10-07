@@ -6,6 +6,78 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 
+const MASTER_DATA = {
+  lines: [
+    "FRONT LINE",
+    "FT & MANIFOLD  LINE",
+    "IMM & PRESS SHOP"
+  ],
+  sub_lines: [
+    "AC LINE",
+    "CAB LINE",
+    "CAC LINE",
+    "CONDENCER LINE",
+    "ECM LINE",
+    "GAMA LINE",
+    "HEADER PRESS",
+    "IMM",
+    "RADIATOR LINE"
+  ],
+  machines: [
+    "CORE BUILDER -5 MATRIX (RAD)",
+    "CORE BUILDER-1 (CAC)",
+    "CORE BUILDER-1 MATRIX (COND)",
+    "CORE BUILDER-1 MATRIX GAMMA (CAC)",
+    "CORE BUILDER-2 MATRIX (COND)",
+    "CORE BUILDER-2 MATRIX GAMMA (CAC)",
+    "CORE BUILDER-4 MATRIX (COND)",
+    "CORE BUILDER-6 MATRIX (RAD)",
+    "DRY LEAK TEST & PRINTER (GAMMA )",
+    "FAN BALANCING-1 (ECM-A)",
+    "FIN MILL -2",
+    "FIN MILL- 5 (MATRIX)",
+    "FIN MILL-10 (AUTO FIN INSERTION)",
+    "FIN MILL-8 (MATRIX)",
+    "HEADER PRESS-2",
+    "HELIUM LEAK DETECTOR-2 (MSIL)",
+    "MOULDING -1",
+    "PIPE ASSY-2 (GAMMA)",
+    "PRESSURE SWITCH ASSEMBLY",
+    "WLT- AC LINE"
+  ],
+  priorities: ["High", "Medium", "Low"],
+  problem_types: [
+    "B/D",
+    "SAFETY /OTHER"
+  ],
+  attendees: [
+    "ADITYA",
+    "AKHIL",
+    "ANUBHAV",
+    "ASHUTOSH TRPATHI",
+    "ASLAM KHAN",
+    "DALIP KUMAR",
+    "DINESH TYAGI",
+    "MUKESH SHARMA",
+    "NARENDER KUMAR",
+    "RADHE SHAYM",
+    "SANTOSH SHARMA",
+    "SATYA PRAKASH"
+  ],
+  closers: [
+    "AKHIL",
+    "ASHUTOSH TIRPATHI",
+    "ASLAM KHAN",
+    "BALAM  DAS",
+    "HARSH",
+    "NARENDER KUMAR",
+    "RADHAY SHYAM",
+    "Santosh Sharma",
+    "Satya Prakash"
+  ],
+  shifts: ["A", "B", "C"]
+};
+
 interface BreakdownFormProps {
   onSubmit?: (data: any) => void;
   onCancel?: () => void;
@@ -72,9 +144,9 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
                 <SelectValue placeholder="Select shift" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="A">Shift A</SelectItem>
-                <SelectItem value="B">Shift B</SelectItem>
-                <SelectItem value="C">Shift C</SelectItem>
+                {MASTER_DATA.shifts.map((shift) => (
+                  <SelectItem key={shift} value={shift}>Shift {shift}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -86,9 +158,9 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
                 <SelectValue placeholder="Select line" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="line1">Line 1</SelectItem>
-                <SelectItem value="line2">Line 2</SelectItem>
-                <SelectItem value="line3">Line 3</SelectItem>
+                {MASTER_DATA.lines.map((line) => (
+                  <SelectItem key={line} value={line}>{line}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -100,8 +172,9 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
                 <SelectValue placeholder="Select sub line" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="subline1">Sub Line 1A</SelectItem>
-                <SelectItem value="subline2">Sub Line 1B</SelectItem>
+                {MASTER_DATA.sub_lines.map((subLine) => (
+                  <SelectItem key={subLine} value={subLine}>{subLine}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -113,9 +186,9 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
                 <SelectValue placeholder="Select machine" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="cnc101">CNC-101</SelectItem>
-                <SelectItem value="lathe205">LATHE-205</SelectItem>
-                <SelectItem value="mill330">MILL-330</SelectItem>
+                {MASTER_DATA.machines.map((machine) => (
+                  <SelectItem key={machine} value={machine}>{machine}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -127,10 +200,9 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
                 <SelectValue placeholder="Select problem" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="motor">Motor Failure</SelectItem>
-                <SelectItem value="belt">Belt Broken</SelectItem>
-                <SelectItem value="electrical">Electrical Issue</SelectItem>
-                <SelectItem value="mechanical">Mechanical Issue</SelectItem>
+                {MASTER_DATA.problem_types.map((problem) => (
+                  <SelectItem key={problem} value={problem}>{problem}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -142,9 +214,9 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
                 <SelectValue placeholder="Select priority" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
+                {MASTER_DATA.priorities.map((priority) => (
+                  <SelectItem key={priority} value={priority}>{priority}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -221,9 +293,9 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
                 <SelectValue placeholder="Select employee" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="emp1">John Doe</SelectItem>
-                <SelectItem value="emp2">Jane Smith</SelectItem>
-                <SelectItem value="emp3">Mike Johnson</SelectItem>
+                {MASTER_DATA.attendees.map((attendee) => (
+                  <SelectItem key={attendee} value={attendee}>{attendee}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -235,9 +307,9 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
                 <SelectValue placeholder="Select employee" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="emp1">John Doe</SelectItem>
-                <SelectItem value="emp2">Jane Smith</SelectItem>
-                <SelectItem value="emp3">Mike Johnson</SelectItem>
+                {MASTER_DATA.closers.map((closer) => (
+                  <SelectItem key={closer} value={closer}>{closer}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

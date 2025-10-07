@@ -1,0 +1,75 @@
+{
+  "lines": [
+    "FRONT LINE",
+    "FT & MANIFOLD  LINE",
+    "IMM & PRESS SHOP"
+  ],
+  "sub_lines": [
+    "AC LINE",
+    "CAB LINE",
+    "CAC LINE",
+    "CONDENCER LINE",
+    "ECM LINE",
+    "GAMA LINE",
+    "HEADER PRESS",
+    "IMM",
+    "RADIATOR LINE"
+  ],
+  "machines": [
+    "CORE BUILDER -5 MATRIX (RAD)",
+    "CORE BUILDER-1 (CAC)",
+    "CORE BUILDER-1 MATRIX (COND)",
+    "CORE BUILDER-1 MATRIX GAMMA (CAC)",
+    "CORE BUILDER-2 MATRIX (COND)",
+    "CORE BUILDER-2 MATRIX GAMMA (CAC)",
+    "CORE BUILDER-4 MATRIX (COND)",
+    "CORE BUILDER-6 MATRIX (RAD)",
+    "DRY LEAK TEST & PRINTER (GAMMA )",
+    "FAN BALANCING-1 (ECM-A)",
+    "FIN MILL -2",
+    "FIN MILL- 5 (MATRIX)",
+    "FIN MILL-10 (AUTO FIN INSERTION)",
+    "FIN MILL-8 (MATRIX)",
+    "HEADER PRESS-2",
+    "HELIUM LEAK DETECTOR-2 (MSIL)",
+    "MOULDING -1",
+    "PIPE ASSY-2 (GAMMA)",
+    "PRESSURE SWITCH ASSEMBLY",
+    "WLT- AC LINE"
+  ],
+  "priorities": ["High", "Medium", "Low"],
+  "problem_types": [
+    "B/D",
+    "SAFETY /OTHER"
+  ],
+  "attendees": [
+    "ADITYA",
+    "AKHIL",
+    "ANUBHAV",
+    "ASHUTOSH TRPATHI",
+    "ASLAM KHAN",
+    "DALIP KUMAR",
+    "DINESH TYAGI",
+    "MUKESH SHARMA",
+    "NARENDER KUMAR",
+    "RADHE SHAYM",
+    "SANTOSH SHARMA",
+    "SATYA PRAKASH"
+  ],
+  "closers": [
+    "AKHIL",
+    "ASHUTOSH TIRPATHI",
+    "ASLAM KHAN",
+    "BALAM  DAS",
+    "HARSH",
+    "NARENDER KUMAR",
+    "RADHAY SHYAM",
+    "Santosh Sharma",
+    "Satya Prakash"
+  ],
+  "shifts": [
+    "A",
+    "B",
+    "C"
+  ]
+}
