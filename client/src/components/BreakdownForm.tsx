@@ -29,6 +29,14 @@ const CATEGORIES = [
   "9. Part life span not predicted"
 ];
 
+interface RootCauseEntry {
+  rootCause: string;
+  category: string;
+  countermeasures: string;
+  evidenceBefore: string;
+  evidenceAfter: string;
+}
+
 interface PreventiveActionEntry {
   description: string;
   byWhom: string;
@@ -80,10 +88,6 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
     capaWhatHappened: '',
     capaFailureMode: '',
     capaSketch: '',
-    capaPreventiveAction: '',
-    capaCountermeasures: '',
-    capaEvidenceBefore: '',
-    capaEvidenceAfter: '',
     capaPreparedBy: '',
     capaCheckedBy: '',
     capaReviewedBy: ''
@@ -91,6 +95,10 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
 
   const [problemDescriptions, setProblemDescriptions] = useState<ProblemDescriptionEntry[]>([
     { description: '', why1: '', check1: '', why2: '', check2: '', why3: '', check3: '', why4: '', check4: '', why5: '', check5: '', category: '', correctiveAction: '', preventiveAction: '' }
+  ]);
+
+  const [rootCauses, setRootCauses] = useState<RootCauseEntry[]>([
+    { rootCause: '', category: '', countermeasures: '', evidenceBefore: '', evidenceAfter: '' }
   ]);
 
   const [preventiveActions, setPreventiveActions] = useState<PreventiveActionEntry[]>([
@@ -129,10 +137,6 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
         capaWhatHappened: initialData.capaWhatHappened || '',
         capaFailureMode: initialData.capaFailureMode || '',
         capaSketch: initialData.capaSketch || '',
-        capaPreventiveAction: initialData.capaPreventiveAction || '',
-        capaCountermeasures: initialData.capaCountermeasures || '',
-        capaEvidenceBefore: initialData.capaEvidenceBefore || '',
-        capaEvidenceAfter: initialData.capaEvidenceAfter || '',
         capaPreparedBy: initialData.capaPreparedBy || '',
         capaCheckedBy: initialData.capaCheckedBy || '',
         capaReviewedBy: initialData.capaReviewedBy || ''
@@ -144,6 +148,15 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
           setProblemDescriptions(parsedProblems);
         } catch {
           setProblemDescriptions([{ description: '', why1: '', check1: '', why2: '', check2: '', why3: '', check3: '', why4: '', check4: '', why5: '', check5: '', category: '', correctiveAction: '', preventiveAction: '' }]);
+        }
+      }
+      
+      if (initialData.capaRootCauses) {
+        try {
+          const parsedRootCauses = JSON.parse(initialData.capaRootCauses);
+          setRootCauses(parsedRootCauses);
+        } catch {
+          setRootCauses([{ rootCause: '', category: '', countermeasures: '', evidenceBefore: '', evidenceAfter: '' }]);
         }
       }
       
@@ -180,7 +193,6 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
     return !!(
       firstProblem.why1 &&
       firstProblem.correctiveAction &&
-      formData.capaPreventiveAction &&
       formData.capaPreparedBy
     );
   };
@@ -199,6 +211,22 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
     const updated = [...problemDescriptions];
     updated[index][field] = value;
     setProblemDescriptions(updated);
+  };
+
+  const addRootCause = () => {
+    setRootCauses([...rootCauses, { rootCause: '', category: '', countermeasures: '', evidenceBefore: '', evidenceAfter: '' }]);
+  };
+
+  const removeRootCause = (index: number) => {
+    if (rootCauses.length > 1) {
+      setRootCauses(rootCauses.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateRootCause = (index: number, field: keyof RootCauseEntry, value: string) => {
+    const updated = [...rootCauses];
+    updated[index][field] = value;
+    setRootCauses(updated);
   };
 
   const addPreventiveAction = () => {
@@ -233,6 +261,7 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
       closedById: formData.closedById || null,
       capaRequired: isCapaRequired ? 'yes' : 'no',
       capaProblemDescriptions: JSON.stringify(problemDescriptions),
+      capaRootCauses: JSON.stringify(rootCauses),
       capaPreventiveActions: JSON.stringify(preventiveActions),
     };
     
@@ -663,53 +692,104 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
               ))}
             </div>
 
-            <div className="space-y-2 mb-6">
-              <Label htmlFor="capaPreventiveAction">Preventive Action <span className="text-destructive">*</span></Label>
-              <Textarea
-                id="capaPreventiveAction"
-                value={formData.capaPreventiveAction}
-                onChange={(e) => setFormData({ ...formData, capaPreventiveAction: e.target.value })}
-                placeholder="Preventive action to avoid recurrence"
-                rows={3}
-                data-testid="textarea-capa-preventive"
-              />
-            </div>
-
-            <div className="space-y-2 mb-6">
-              <Label htmlFor="capaCountermeasures">Countermeasures</Label>
-              <Textarea
-                id="capaCountermeasures"
-                value={formData.capaCountermeasures}
-                onChange={(e) => setFormData({ ...formData, capaCountermeasures: e.target.value })}
-                placeholder="Describe countermeasures"
-                rows={2}
-                data-testid="textarea-capa-countermeasures"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <div className="space-y-2">
-                <Label htmlFor="capaEvidenceBefore">Evidence Before</Label>
-                <Textarea
-                  id="capaEvidenceBefore"
-                  value={formData.capaEvidenceBefore}
-                  onChange={(e) => setFormData({ ...formData, capaEvidenceBefore: e.target.value })}
-                  placeholder="Evidence before corrective action"
-                  rows={2}
-                  data-testid="textarea-capa-evidence-before"
-                />
+            <div className="space-y-4 mb-6">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium">Root Causes & Countermeasures</h4>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm"
+                  onClick={addRootCause}
+                  data-testid="button-add-root-cause"
+                >
+                  Add More
+                </Button>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="capaEvidenceAfter">Evidence After</Label>
-                <Textarea
-                  id="capaEvidenceAfter"
-                  value={formData.capaEvidenceAfter}
-                  onChange={(e) => setFormData({ ...formData, capaEvidenceAfter: e.target.value })}
-                  placeholder="Evidence after corrective action"
-                  rows={2}
-                  data-testid="textarea-capa-evidence-after"
-                />
-              </div>
+              
+              {rootCauses.map((rootCause, index) => (
+                <Card key={index} className="p-4 relative">
+                  {rootCauses.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute top-2 right-2"
+                      onClick={() => removeRootCause(index)}
+                      data-testid={`button-remove-root-cause-${index}`}
+                    >
+                      ✕
+                    </Button>
+                  )}
+                  
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor={`rootCause-${index}`}>Root causes</Label>
+                      <Textarea
+                        id={`rootCause-${index}`}
+                        value={rootCause.rootCause}
+                        onChange={(e) => updateRootCause(index, 'rootCause', e.target.value)}
+                        placeholder="Describe root causes"
+                        rows={2}
+                        data-testid={`textarea-root-cause-${index}`}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor={`rcCategory-${index}`}>Cat.(*)</Label>
+                      <Select 
+                        value={rootCause.category} 
+                        onValueChange={(value) => updateRootCause(index, 'category', value)}
+                      >
+                        <SelectTrigger id={`rcCategory-${index}`} data-testid={`select-rc-category-${index}`}>
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CATEGORIES.map((cat) => (
+                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor={`countermeasures-${index}`}>Countermeasures</Label>
+                      <Textarea
+                        id={`countermeasures-${index}`}
+                        value={rootCause.countermeasures}
+                        onChange={(e) => updateRootCause(index, 'countermeasures', e.target.value)}
+                        placeholder="Describe countermeasures"
+                        rows={2}
+                        data-testid={`textarea-countermeasures-${index}`}
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor={`evidenceBefore-${index}`}>Evidence -1 Before</Label>
+                        <Textarea
+                          id={`evidenceBefore-${index}`}
+                          value={rootCause.evidenceBefore}
+                          onChange={(e) => updateRootCause(index, 'evidenceBefore', e.target.value)}
+                          placeholder="Evidence before"
+                          rows={2}
+                          data-testid={`textarea-evidence-before-${index}`}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`evidenceAfter-${index}`}>Evidence -2 After</Label>
+                        <Textarea
+                          id={`evidenceAfter-${index}`}
+                          value={rootCause.evidenceAfter}
+                          onChange={(e) => updateRootCause(index, 'evidenceAfter', e.target.value)}
+                          placeholder="Evidence after"
+                          rows={2}
+                          data-testid={`textarea-evidence-after-${index}`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              ))}
             </div>
 
             <div className="space-y-4 mb-6">

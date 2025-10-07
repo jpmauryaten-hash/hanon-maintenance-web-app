@@ -72,11 +72,8 @@ export const breakdowns = pgTable("breakdowns", {
   capaWhatHappened: text("capa_what_happened"),
   capaFailureMode: text("capa_failure_mode"),
   capaSketch: text("capa_sketch"),
-  capaProblemDescriptions: text("capa_problem_descriptions"), // JSON array of {description, why1-5, check1-5, category, correctiveAction}
-  capaPreventiveAction: text("capa_preventive_action"),
-  capaCountermeasures: text("capa_countermeasures"),
-  capaEvidenceBefore: text("capa_evidence_before"),
-  capaEvidenceAfter: text("capa_evidence_after"),
+  capaProblemDescriptions: text("capa_problem_descriptions"), // JSON array of {description, why1-5, check1-5, category, correctiveAction, preventiveAction}
+  capaRootCauses: text("capa_root_causes"), // JSON array of {rootCause, category, countermeasures, evidenceBefore, evidenceAfter}
   capaPreventiveActions: text("capa_preventive_actions"), // JSON array of {description, byWhom, action, evidence1, evidence2}
   capaPreparedBy: text("capa_prepared_by"),
   capaCheckedBy: text("capa_checked_by"),
