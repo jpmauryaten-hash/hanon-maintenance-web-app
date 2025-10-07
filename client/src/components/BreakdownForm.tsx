@@ -369,22 +369,6 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="status">Status <span className="text-destructive">*</span></Label>
-            <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
-              <SelectTrigger id="status" data-testid="select-status">
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUSES.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {status.charAt(0).toUpperCase() + status.slice(1)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="startTime">Start Time <span className="text-destructive">*</span></Label>
             <Input
               id="startTime"
@@ -428,6 +412,22 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
               <SelectContent>
                 {employees.map((employee: any) => (
                   <SelectItem key={employee.id} value={employee.id}>{employee.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="status">Status <span className="text-destructive">*</span></Label>
+            <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+              <SelectTrigger id="status" data-testid="select-status">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUSES.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -646,19 +646,13 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
                     
                     <div className="space-y-2">
                       <Label htmlFor={`category-${index}`}>Category (4M)</Label>
-                      <Select 
-                        value={problem.category} 
-                        onValueChange={(value) => updateProblemDescription(index, 'category', value)}
-                      >
-                        <SelectTrigger id={`category-${index}`} data-testid={`select-category-${index}`}>
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CATEGORIES.map((cat) => (
-                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Input
+                        id={`category-${index}`}
+                        value={problem.category}
+                        onChange={(e) => updateProblemDescription(index, 'category', e.target.value)}
+                        placeholder="Enter 4M category"
+                        data-testid={`input-category-${index}`}
+                      />
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -736,19 +730,13 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
                     
                     <div className="space-y-2">
                       <Label htmlFor={`rcCategory-${index}`}>Cat.(*)</Label>
-                      <Select 
-                        value={rootCause.category} 
-                        onValueChange={(value) => updateRootCause(index, 'category', value)}
-                      >
-                        <SelectTrigger id={`rcCategory-${index}`} data-testid={`select-rc-category-${index}`}>
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CATEGORIES.map((cat) => (
-                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Input
+                        id={`rcCategory-${index}`}
+                        value={rootCause.category}
+                        onChange={(e) => updateRootCause(index, 'category', e.target.value)}
+                        placeholder="Enter category"
+                        data-testid={`input-rc-category-${index}`}
+                      />
                     </div>
                     
                     <div className="space-y-2">
