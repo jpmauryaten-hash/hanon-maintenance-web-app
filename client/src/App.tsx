@@ -12,7 +12,8 @@ import BreakdownTracker from "@/pages/BreakdownTracker";
 import Reports from "@/pages/Reports";
 import MasterData from "@/pages/MasterData";
 import UserManagement from "@/pages/UserManagement";
-import Login from "@/pages/Login";
+import Login from "@/pages/login";
+import { AuthProvider, ProtectedRoute, useAuth } from "@/lib/auth";
 
 function Router() {
   const [location] = useLocation();
@@ -26,14 +27,26 @@ function Router() {
     );
   }
 
+  return (
+    <ProtectedRoute>
+      <AuthenticatedApp />
+    </ProtectedRoute>
+  );
+}
+
+function AuthenticatedApp() {
+  const { user } = useAuth();
+  
   const style = {
     "--sidebar-width": "16rem",
   };
 
+  const userRole = (user?.role?.toLowerCase() || "viewer") as "admin" | "supervisor" | "engineer" | "viewer";
+
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="flex h-screen w-full">
-        <AppSidebar role="admin" userName="Admin User" />
+        <AppSidebar role={userRole} userName={user?.name || "User"} />
         <div className="flex flex-col flex-1">
           <header className="flex items-center justify-between p-4 border-b h-16">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
@@ -58,10 +71,12 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
