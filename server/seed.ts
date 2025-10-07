@@ -43,7 +43,7 @@ export async function seedDatabase() {
       password: hashedPassword,
       name: "Admin User",
       email: "admin@example.com",
-      role: "admin",
+      role: "Admin",
     });
     console.log("✓ Created admin user (admin/admin123)");
 
@@ -54,7 +54,7 @@ export async function seedDatabase() {
       password: engineerPassword,
       name: "John Doe",
       email: "engineer@example.com",
-      role: "engineer",
+      role: "Engineer",
     });
     console.log("✓ Created engineer user");
 
