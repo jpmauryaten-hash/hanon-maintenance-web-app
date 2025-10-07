@@ -78,6 +78,164 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Breakdown routes
+  // Master Data CRUD Routes
+  
+  // Lines
+  app.post("/api/lines", isAuthenticated, hasRole("Admin"), async (req, res) => {
+    try {
+      const { name, description } = req.body;
+      const [line] = await db.insert(lines).values({ name, description }).returning();
+      res.json(line);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to create line" });
+    }
+  });
+
+  app.put("/api/lines/:id", isAuthenticated, hasRole("Admin"), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, description } = req.body;
+      const [line] = await db.update(lines)
+        .set({ name, description })
+        .where(eq(lines.id, id))
+        .returning();
+      
+      if (!line) {
+        return res.status(404).json({ error: "Line not found" });
+      }
+      res.json(line);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update line" });
+    }
+  });
+
+  app.delete("/api/lines/:id", isAuthenticated, hasRole("Admin"), async (req, res) => {
+    try {
+      const { id } = req.params;
+      await db.delete(lines).where(eq(lines.id, id));
+      res.json({ message: "Line deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete line" });
+    }
+  });
+
+  // Machines
+  app.post("/api/machines", isAuthenticated, hasRole("Admin"), async (req, res) => {
+    try {
+      const { name, lineId, subLineId, type } = req.body;
+      const [machine] = await db.insert(machines).values({ name, lineId, subLineId, type }).returning();
+      res.json(machine);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to create machine" });
+    }
+  });
+
+  app.put("/api/machines/:id", isAuthenticated, hasRole("Admin"), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, lineId, subLineId, type } = req.body;
+      const [machine] = await db.update(machines)
+        .set({ name, lineId, subLineId, type })
+        .where(eq(machines.id, id))
+        .returning();
+      
+      if (!machine) {
+        return res.status(404).json({ error: "Machine not found" });
+      }
+      res.json(machine);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update machine" });
+    }
+  });
+
+  app.delete("/api/machines/:id", isAuthenticated, hasRole("Admin"), async (req, res) => {
+    try {
+      const { id } = req.params;
+      await db.delete(machines).where(eq(machines.id, id));
+      res.json({ message: "Machine deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete machine" });
+    }
+  });
+
+  // Employees
+  app.post("/api/employees", isAuthenticated, hasRole("Admin"), async (req, res) => {
+    try {
+      const { name, department, role } = req.body;
+      const [employee] = await db.insert(employees).values({ name, department, role }).returning();
+      res.json(employee);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to create employee" });
+    }
+  });
+
+  app.put("/api/employees/:id", isAuthenticated, hasRole("Admin"), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, department, role } = req.body;
+      const [employee] = await db.update(employees)
+        .set({ name, department, role })
+        .where(eq(employees.id, id))
+        .returning();
+      
+      if (!employee) {
+        return res.status(404).json({ error: "Employee not found" });
+      }
+      res.json(employee);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update employee" });
+    }
+  });
+
+  app.delete("/api/employees/:id", isAuthenticated, hasRole("Admin"), async (req, res) => {
+    try {
+      const { id } = req.params;
+      await db.delete(employees).where(eq(employees.id, id));
+      res.json({ message: "Employee deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete employee" });
+    }
+  });
+
+  // Problem Types
+  app.post("/api/problem-types", isAuthenticated, hasRole("Admin"), async (req, res) => {
+    try {
+      const { name, description } = req.body;
+      const [problemType] = await db.insert(problemTypes).values({ name, description }).returning();
+      res.json(problemType);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to create problem type" });
+    }
+  });
+
+  app.put("/api/problem-types/:id", isAuthenticated, hasRole("Admin"), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, description } = req.body;
+      const [problemType] = await db.update(problemTypes)
+        .set({ name, description })
+        .where(eq(problemTypes.id, id))
+        .returning();
+      
+      if (!problemType) {
+        return res.status(404).json({ error: "Problem type not found" });
+      }
+      res.json(problemType);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update problem type" });
+    }
+  });
+
+  app.delete("/api/problem-types/:id", isAuthenticated, hasRole("Admin"), async (req, res) => {
+    try {
+      const { id } = req.params;
+      await db.delete(problemTypes).where(eq(problemTypes.id, id));
+      res.json({ message: "Problem type deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete problem type" });
+    }
+  });
+
   app.get("/api/breakdowns", isAuthenticated, async (req, res) => {
     try {
       const allBreakdowns = await db
