@@ -29,6 +29,14 @@ const CATEGORIES = [
   "9. Part life span not predicted"
 ];
 
+interface PreventiveActionEntry {
+  description: string;
+  byWhom: string;
+  action: string;
+  evidence1: string;
+  evidence2: string;
+}
+
 export default function BreakdownForm({ onSubmit, onCancel, initialData }: BreakdownFormProps) {
   const [formData, setFormData] = useState({
     date: '',
@@ -76,6 +84,10 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
     capaCheckedBy: '',
     capaReviewedBy: ''
   });
+
+  const [preventiveActions, setPreventiveActions] = useState<PreventiveActionEntry[]>([
+    { description: '', byWhom: '', action: '', evidence1: '', evidence2: '' }
+  ]);
 
   const { data: lines = [] } = useQuery<any[]>({ queryKey: ["/api/lines"] });
   const { data: subLines = [] } = useQuery<any[]>({ queryKey: ["/api/sub-lines"] });
@@ -130,6 +142,15 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
         capaCheckedBy: initialData.capaCheckedBy || '',
         capaReviewedBy: initialData.capaReviewedBy || ''
       });
+      
+      if (initialData.capaPreventiveActions) {
+        try {
+          const parsedActions = JSON.parse(initialData.capaPreventiveActions);
+          setPreventiveActions(parsedActions);
+        } catch {
+          setPreventiveActions([{ description: '', byWhom: '', action: '', evidence1: '', evidence2: '' }]);
+        }
+      }
     }
   }, [initialData]);
 
@@ -159,6 +180,22 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
     );
   };
 
+  const addPreventiveAction = () => {
+    setPreventiveActions([...preventiveActions, { description: '', byWhom: '', action: '', evidence1: '', evidence2: '' }]);
+  };
+
+  const removePreventiveAction = (index: number) => {
+    if (preventiveActions.length > 1) {
+      setPreventiveActions(preventiveActions.filter((_, i) => i !== index));
+    }
+  };
+
+  const updatePreventiveAction = (index: number, field: keyof PreventiveActionEntry, value: string) => {
+    const updated = [...preventiveActions];
+    updated[index][field] = value;
+    setPreventiveActions(updated);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -174,6 +211,7 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
       subLineId: formData.subLineId || null,
       closedById: formData.closedById || null,
       capaRequired: isCapaRequired ? 'yes' : 'no',
+      capaPreventiveActions: JSON.stringify(preventiveActions),
     };
     
     onSubmit?.(submitData);
@@ -601,6 +639,100 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
                   data-testid="textarea-capa-evidence-after"
                 />
               </div>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium">Preventive Action Plan</h4>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm"
+                  onClick={addPreventiveAction}
+                  data-testid="button-add-preventive-action"
+                >
+                  Add More
+                </Button>
+              </div>
+              
+              {preventiveActions.map((action, index) => (
+                <Card key={index} className="p-4 relative">
+                  {preventiveActions.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute top-2 right-2"
+                      onClick={() => removePreventiveAction(index)}
+                      data-testid={`button-remove-preventive-action-${index}`}
+                    >
+                      ✕
+                    </Button>
+                  )}
+                  
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor={`paDescription-${index}`}>Preventive Action Description</Label>
+                      <Textarea
+                        id={`paDescription-${index}`}
+                        value={action.description}
+                        onChange={(e) => updatePreventiveAction(index, 'description', e.target.value)}
+                        placeholder="Describe preventive action"
+                        rows={2}
+                        data-testid={`textarea-pa-description-${index}`}
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor={`paByWhom-${index}`}>By whom</Label>
+                        <Input
+                          id={`paByWhom-${index}`}
+                          value={action.byWhom}
+                          onChange={(e) => updatePreventiveAction(index, 'byWhom', e.target.value)}
+                          placeholder="Person responsible"
+                          data-testid={`input-pa-bywhom-${index}`}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`paAction-${index}`}>Preventive Action</Label>
+                        <Input
+                          id={`paAction-${index}`}
+                          value={action.action}
+                          onChange={(e) => updatePreventiveAction(index, 'action', e.target.value)}
+                          placeholder="Action to be taken"
+                          data-testid={`input-pa-action-${index}`}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor={`paEvidence1-${index}`}>Evidence -1</Label>
+                        <Textarea
+                          id={`paEvidence1-${index}`}
+                          value={action.evidence1}
+                          onChange={(e) => updatePreventiveAction(index, 'evidence1', e.target.value)}
+                          placeholder="First evidence"
+                          rows={2}
+                          data-testid={`textarea-pa-evidence1-${index}`}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`paEvidence2-${index}`}>Evidence -2</Label>
+                        <Textarea
+                          id={`paEvidence2-${index}`}
+                          value={action.evidence2}
+                          onChange={(e) => updatePreventiveAction(index, 'evidence2', e.target.value)}
+                          placeholder="Second evidence"
+                          rows={2}
+                          data-testid={`textarea-pa-evidence2-${index}`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              ))}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

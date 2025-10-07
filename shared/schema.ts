@@ -89,6 +89,7 @@ export const breakdowns = pgTable("breakdowns", {
   capaCountermeasures: text("capa_countermeasures"),
   capaEvidenceBefore: text("capa_evidence_before"),
   capaEvidenceAfter: text("capa_evidence_after"),
+  capaPreventiveActions: text("capa_preventive_actions"), // JSON array of {description, byWhom, action, evidence1, evidence2}
   capaPreparedBy: text("capa_prepared_by"),
   capaCheckedBy: text("capa_checked_by"),
   capaReviewedBy: text("capa_reviewed_by"),
