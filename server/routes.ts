@@ -80,7 +80,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Breakdown routes
   app.get("/api/breakdowns", isAuthenticated, async (req, res) => {
     try {
-      const allBreakdowns = await db.select().from(breakdowns);
+      const allBreakdowns = await db
+        .select({
+          id: breakdowns.id,
+          date: breakdowns.date,
+          shift: breakdowns.shift,
+          line: lines.name,
+          machine: machines.name,
+          problem: problemTypes.name,
+          status: breakdowns.status,
+          totalMinutes: breakdowns.totalMinutes,
+          attendBy: employees.name,
+          lineId: breakdowns.lineId,
+          subLineId: breakdowns.subLineId,
+          machineId: breakdowns.machineId,
+          problemTypeId: breakdowns.problemTypeId,
+          priority: breakdowns.priority,
+          actionTaken: breakdowns.actionTaken,
+          rootCause: breakdowns.rootCause,
+          startTime: breakdowns.startTime,
+          finishTime: breakdowns.finishTime,
+          majorContribution: breakdowns.majorContribution,
+          majorContributionTime: breakdowns.majorContributionTime,
+          attendById: breakdowns.attendById,
+          closedById: breakdowns.closedById,
+          remark: breakdowns.remark,
+          createdAt: breakdowns.createdAt,
+        })
+        .from(breakdowns)
+        .leftJoin(lines, eq(breakdowns.lineId, lines.id))
+        .leftJoin(machines, eq(breakdowns.machineId, machines.id))
+        .leftJoin(problemTypes, eq(breakdowns.problemTypeId, problemTypes.id))
+        .leftJoin(employees, eq(breakdowns.attendById, employees.id));
+      
       res.json(allBreakdowns);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch breakdowns" });
