@@ -1,82 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
+import { useQuery } from "@tanstack/react-query";
 
-const MASTER_DATA = {
-  lines: [
-    "FRONT LINE",
-    "FT & MANIFOLD  LINE",
-    "IMM & PRESS SHOP"
-  ],
-  sub_lines: [
-    "AC LINE",
-    "CAB LINE",
-    "CAC LINE",
-    "CONDENCER LINE",
-    "ECM LINE",
-    "GAMA LINE",
-    "HEADER PRESS",
-    "IMM",
-    "RADIATOR LINE"
-  ],
-  machines: [
-    "CORE BUILDER -5 MATRIX (RAD)",
-    "CORE BUILDER-1 (CAC)",
-    "CORE BUILDER-1 MATRIX (COND)",
-    "CORE BUILDER-1 MATRIX GAMMA (CAC)",
-    "CORE BUILDER-2 MATRIX (COND)",
-    "CORE BUILDER-2 MATRIX GAMMA (CAC)",
-    "CORE BUILDER-4 MATRIX (COND)",
-    "CORE BUILDER-6 MATRIX (RAD)",
-    "DRY LEAK TEST & PRINTER (GAMMA )",
-    "FAN BALANCING-1 (ECM-A)",
-    "FIN MILL -2",
-    "FIN MILL- 5 (MATRIX)",
-    "FIN MILL-10 (AUTO FIN INSERTION)",
-    "FIN MILL-8 (MATRIX)",
-    "HEADER PRESS-2",
-    "HELIUM LEAK DETECTOR-2 (MSIL)",
-    "MOULDING -1",
-    "PIPE ASSY-2 (GAMMA)",
-    "PRESSURE SWITCH ASSEMBLY",
-    "WLT- AC LINE"
-  ],
-  priorities: ["High", "Medium", "Low"],
-  problem_types: [
-    "B/D",
-    "SAFETY /OTHER"
-  ],
-  attendees: [
-    "ADITYA",
-    "AKHIL",
-    "ANUBHAV",
-    "ASHUTOSH TRPATHI",
-    "ASLAM KHAN",
-    "DALIP KUMAR",
-    "DINESH TYAGI",
-    "MUKESH SHARMA",
-    "NARENDER KUMAR",
-    "RADHE SHAYM",
-    "SANTOSH SHARMA",
-    "SATYA PRAKASH"
-  ],
-  closers: [
-    "AKHIL",
-    "ASHUTOSH TIRPATHI",
-    "ASLAM KHAN",
-    "BALAM  DAS",
-    "HARSH",
-    "NARENDER KUMAR",
-    "RADHAY SHYAM",
-    "Santosh Sharma",
-    "Satya Prakash"
-  ],
-  shifts: ["A", "B", "C"]
-};
+const SHIFTS = ["A", "B", "C"];
+const PRIORITIES = ["High", "Medium", "Low"];
 
 interface BreakdownFormProps {
   onSubmit?: (data: any) => void;
@@ -88,22 +20,29 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
   const [formData, setFormData] = useState(initialData || {
     date: '',
     shift: '',
-    line: '',
-    subLine: '',
-    machine: '',
-    problem: '',
+    lineId: '',
+    subLineId: '',
+    machineId: '',
+    problemTypeId: '',
     priority: '',
     actionTaken: '',
     rootCause: '',
     startTime: '',
     finishTime: '',
-    totalTime: '',
+    totalMinutes: '',
     majorContribution: '',
     majorContributionTime: '',
-    attendBy: '',
-    closedBy: '',
-    remark: ''
+    attendById: '',
+    closedById: '',
+    remark: '',
+    status: 'open'
   });
+
+  const { data: lines = [] } = useQuery<any[]>({ queryKey: ["/api/lines"] });
+  const { data: subLines = [] } = useQuery<any[]>({ queryKey: ["/api/sub-lines"] });
+  const { data: machines = [] } = useQuery<any[]>({ queryKey: ["/api/machines"] });
+  const { data: problemTypes = [] } = useQuery<any[]>({ queryKey: ["/api/problem-types"] });
+  const { data: employees = [] } = useQuery<any[]>({ queryKey: ["/api/employees"] });
 
   const calculateTotalTime = () => {
     if (formData.startTime && formData.finishTime) {
@@ -111,14 +50,26 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
       const finish = new Date(`2000-01-01T${formData.finishTime}`);
       const diffMs = finish.getTime() - start.getTime();
       const diffMins = Math.round(diffMs / 60000);
-      setFormData({ ...formData, totalTime: diffMins.toString() });
+      setFormData({ ...formData, totalMinutes: diffMins });
     }
   };
 
+  useEffect(() => {
+    calculateTotalTime();
+  }, [formData.startTime, formData.finishTime]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Form submitted:', formData);
-    onSubmit?.(formData);
+    
+    const submitData = {
+      ...formData,
+      totalMinutes: formData.totalMinutes ? parseInt(formData.totalMinutes) : null,
+      majorContributionTime: formData.majorContributionTime ? parseInt(formData.majorContributionTime) : null,
+      subLineId: formData.subLineId || null,
+      closedById: formData.closedById || null,
+    };
+    
+    onSubmit?.(submitData);
   };
 
   return (
@@ -144,7 +95,7 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
                 <SelectValue placeholder="Select shift" />
               </SelectTrigger>
               <SelectContent>
-                {MASTER_DATA.shifts.map((shift) => (
+                {SHIFTS.map((shift) => (
                   <SelectItem key={shift} value={shift}>Shift {shift}</SelectItem>
                 ))}
               </SelectContent>
@@ -153,13 +104,13 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
 
           <div className="space-y-2">
             <Label htmlFor="line">Line <span className="text-destructive">*</span></Label>
-            <Select value={formData.line} onValueChange={(value) => setFormData({ ...formData, line: value })}>
+            <Select value={formData.lineId} onValueChange={(value) => setFormData({ ...formData, lineId: value })}>
               <SelectTrigger id="line" data-testid="select-line">
                 <SelectValue placeholder="Select line" />
               </SelectTrigger>
               <SelectContent>
-                {MASTER_DATA.lines.map((line) => (
-                  <SelectItem key={line} value={line}>{line}</SelectItem>
+                {lines.map((line: any) => (
+                  <SelectItem key={line.id} value={line.id}>{line.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -167,13 +118,13 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
 
           <div className="space-y-2">
             <Label htmlFor="subLine">Sub Line</Label>
-            <Select value={formData.subLine} onValueChange={(value) => setFormData({ ...formData, subLine: value })}>
+            <Select value={formData.subLineId} onValueChange={(value) => setFormData({ ...formData, subLineId: value })}>
               <SelectTrigger id="subLine" data-testid="select-subline">
                 <SelectValue placeholder="Select sub line" />
               </SelectTrigger>
               <SelectContent>
-                {MASTER_DATA.sub_lines.map((subLine) => (
-                  <SelectItem key={subLine} value={subLine}>{subLine}</SelectItem>
+                {subLines.map((subLine: any) => (
+                  <SelectItem key={subLine.id} value={subLine.id}>{subLine.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -181,13 +132,13 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
 
           <div className="space-y-2">
             <Label htmlFor="machine">Machine <span className="text-destructive">*</span></Label>
-            <Select value={formData.machine} onValueChange={(value) => setFormData({ ...formData, machine: value })}>
+            <Select value={formData.machineId} onValueChange={(value) => setFormData({ ...formData, machineId: value })}>
               <SelectTrigger id="machine" data-testid="select-machine">
                 <SelectValue placeholder="Select machine" />
               </SelectTrigger>
               <SelectContent>
-                {MASTER_DATA.machines.map((machine) => (
-                  <SelectItem key={machine} value={machine}>{machine}</SelectItem>
+                {machines.map((machine: any) => (
+                  <SelectItem key={machine.id} value={machine.id}>{machine.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -195,13 +146,13 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
 
           <div className="space-y-2">
             <Label htmlFor="problem">Problem Type <span className="text-destructive">*</span></Label>
-            <Select value={formData.problem} onValueChange={(value) => setFormData({ ...formData, problem: value })}>
+            <Select value={formData.problemTypeId} onValueChange={(value) => setFormData({ ...formData, problemTypeId: value })}>
               <SelectTrigger id="problem" data-testid="select-problem">
                 <SelectValue placeholder="Select problem" />
               </SelectTrigger>
               <SelectContent>
-                {MASTER_DATA.problem_types.map((problem) => (
-                  <SelectItem key={problem} value={problem}>{problem}</SelectItem>
+                {problemTypes.map((problem: any) => (
+                  <SelectItem key={problem.id} value={problem.id}>{problem.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -214,7 +165,7 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
                 <SelectValue placeholder="Select priority" />
               </SelectTrigger>
               <SelectContent>
-                {MASTER_DATA.priorities.map((priority) => (
+                {PRIORITIES.map((priority) => (
                   <SelectItem key={priority} value={priority}>{priority}</SelectItem>
                 ))}
               </SelectContent>
@@ -227,12 +178,9 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
               id="startTime"
               type="time"
               value={formData.startTime}
-              onChange={(e) => {
-                setFormData({ ...formData, startTime: e.target.value });
-                setTimeout(calculateTotalTime, 100);
-              }}
+              onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
               required
-              data-testid="input-start-time"
+              data-testid="input-starttime"
             />
           </div>
 
@@ -242,59 +190,32 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
               id="finishTime"
               type="time"
               value={formData.finishTime}
-              onChange={(e) => {
-                setFormData({ ...formData, finishTime: e.target.value });
-                setTimeout(calculateTotalTime, 100);
-              }}
-              data-testid="input-finish-time"
+              onChange={(e) => setFormData({ ...formData, finishTime: e.target.value })}
+              data-testid="input-finishtime"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="totalTime">Total Time (minutes)</Label>
+            <Label htmlFor="totalMinutes">Total Time (minutes)</Label>
             <Input
-              id="totalTime"
-              type="text"
-              value={formData.totalTime}
-              disabled
-              className="bg-muted"
-              data-testid="input-total-time"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="majorContribution">Major Contribution in BD</Label>
-            <Input
-              id="majorContribution"
-              type="text"
-              value={formData.majorContribution}
-              onChange={(e) => setFormData({ ...formData, majorContribution: e.target.value })}
-              placeholder="Describe major contribution"
-              data-testid="input-major-contribution"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="majorContributionTime">Major Contribution Time (minutes)</Label>
-            <Input
-              id="majorContributionTime"
+              id="totalMinutes"
               type="number"
-              value={formData.majorContributionTime}
-              onChange={(e) => setFormData({ ...formData, majorContributionTime: e.target.value })}
-              placeholder="Time in minutes"
-              data-testid="input-major-contribution-time"
+              value={formData.totalMinutes}
+              onChange={(e) => setFormData({ ...formData, totalMinutes: e.target.value })}
+              placeholder="Auto-calculated"
+              data-testid="input-totaltime"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="attendBy">Attended By <span className="text-destructive">*</span></Label>
-            <Select value={formData.attendBy} onValueChange={(value) => setFormData({ ...formData, attendBy: value })}>
-              <SelectTrigger id="attendBy" data-testid="select-attend-by">
-                <SelectValue placeholder="Select employee" />
+            <Label htmlFor="attendBy">Attend By <span className="text-destructive">*</span></Label>
+            <Select value={formData.attendById} onValueChange={(value) => setFormData({ ...formData, attendById: value })}>
+              <SelectTrigger id="attendBy" data-testid="select-attendby">
+                <SelectValue placeholder="Select attendee" />
               </SelectTrigger>
               <SelectContent>
-                {MASTER_DATA.attendees.map((attendee) => (
-                  <SelectItem key={attendee} value={attendee}>{attendee}</SelectItem>
+                {employees.map((employee: any) => (
+                  <SelectItem key={employee.id} value={employee.id}>{employee.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -302,63 +223,87 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
 
           <div className="space-y-2">
             <Label htmlFor="closedBy">Closed By</Label>
-            <Select value={formData.closedBy} onValueChange={(value) => setFormData({ ...formData, closedBy: value })}>
-              <SelectTrigger id="closedBy" data-testid="select-closed-by">
-                <SelectValue placeholder="Select employee" />
+            <Select value={formData.closedById} onValueChange={(value) => setFormData({ ...formData, closedById: value })}>
+              <SelectTrigger id="closedBy" data-testid="select-closedby">
+                <SelectValue placeholder="Select closer" />
               </SelectTrigger>
               <SelectContent>
-                {MASTER_DATA.closers.map((closer) => (
-                  <SelectItem key={closer} value={closer}>{closer}</SelectItem>
+                {employees.map((employee: any) => (
+                  <SelectItem key={employee.id} value={employee.id}>{employee.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="actionTaken">Action Taken</Label>
-            <Textarea
-              id="actionTaken"
-              value={formData.actionTaken}
-              onChange={(e) => setFormData({ ...formData, actionTaken: e.target.value })}
-              placeholder="Describe the action taken to resolve the issue"
-              rows={3}
-              data-testid="textarea-action-taken"
-            />
-          </div>
-
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="rootCause">Root Cause</Label>
-            <Textarea
-              id="rootCause"
-              value={formData.rootCause}
-              onChange={(e) => setFormData({ ...formData, rootCause: e.target.value })}
-              placeholder="Identify the root cause of the breakdown"
-              rows={3}
-              data-testid="textarea-root-cause"
-            />
-          </div>
-
-          <div className="space-y-2 md:col-span-2">
-            <Label htmlFor="remark">Remark</Label>
-            <Textarea
-              id="remark"
-              value={formData.remark}
-              onChange={(e) => setFormData({ ...formData, remark: e.target.value })}
-              placeholder="Additional remarks or notes"
-              rows={2}
-              data-testid="textarea-remark"
-            />
-          </div>
         </div>
 
-        <div className="flex justify-end gap-4 pt-4">
+        <div className="space-y-2">
+          <Label htmlFor="actionTaken">Action Taken</Label>
+          <Textarea
+            id="actionTaken"
+            value={formData.actionTaken}
+            onChange={(e) => setFormData({ ...formData, actionTaken: e.target.value })}
+            placeholder="Describe the action taken"
+            rows={3}
+            data-testid="textarea-actiontaken"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="rootCause">Root Cause</Label>
+          <Textarea
+            id="rootCause"
+            value={formData.rootCause}
+            onChange={(e) => setFormData({ ...formData, rootCause: e.target.value })}
+            placeholder="Describe the root cause"
+            rows={3}
+            data-testid="textarea-rootcause"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="majorContribution">Major Contribution</Label>
+          <Textarea
+            id="majorContribution"
+            value={formData.majorContribution}
+            onChange={(e) => setFormData({ ...formData, majorContribution: e.target.value })}
+            placeholder="Describe major contribution"
+            rows={2}
+            data-testid="textarea-majorcontribution"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="majorContributionTime">Major Contribution Time (minutes)</Label>
+          <Input
+            id="majorContributionTime"
+            type="number"
+            value={formData.majorContributionTime}
+            onChange={(e) => setFormData({ ...formData, majorContributionTime: e.target.value })}
+            placeholder="Enter time in minutes"
+            data-testid="input-majorcontributiontime"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="remark">Remark</Label>
+          <Textarea
+            id="remark"
+            value={formData.remark}
+            onChange={(e) => setFormData({ ...formData, remark: e.target.value })}
+            placeholder="Additional remarks"
+            rows={2}
+            data-testid="textarea-remark"
+          />
+        </div>
+
+        <div className="flex gap-4 justify-end">
           {onCancel && (
             <Button type="button" variant="outline" onClick={onCancel} data-testid="button-cancel">
               Cancel
             </Button>
           )}
           <Button type="submit" data-testid="button-submit">
-            Submit Breakdown Entry
+            Submit
           </Button>
         </div>
       </form>

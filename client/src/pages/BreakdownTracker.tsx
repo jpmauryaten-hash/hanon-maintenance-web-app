@@ -9,48 +9,69 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
-const mockBreakdowns = [
-  {
-    id: 1,
-    date: '2025-10-07',
-    shift: 'A',
-    line: 'Line 1',
-    machine: 'CNC-101',
-    problem: 'Motor failure',
-    status: 'open' as const,
-    totalMinutes: 120,
-    attendBy: 'John Doe'
-  },
-  {
-    id: 2,
-    date: '2025-10-07',
-    shift: 'B',
-    line: 'Line 2',
-    machine: 'LATHE-205',
-    problem: 'Belt broken',
-    status: 'closed' as const,
-    totalMinutes: 45,
-    attendBy: 'Jane Smith'
-  }
-];
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function BreakdownTracker() {
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [breakdowns, setBreakdowns] = useState(mockBreakdowns);
+  const { toast } = useToast();
+
+  const { data: breakdowns = [] } = useQuery<any[]>({
+    queryKey: ["/api/breakdowns"],
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return await apiRequest("POST", "/api/breakdowns", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/breakdowns"] });
+      setIsFormOpen(false);
+      toast({
+        title: "Success",
+        description: "Breakdown entry created successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create breakdown entry",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleSubmit = (data: any) => {
-    console.log('New breakdown:', data);
-    setIsFormOpen(false);
+    createMutation.mutate(data);
   };
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/breakdowns/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/breakdowns"] });
+      toast({
+        title: "Success",
+        description: "Breakdown entry deleted successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete breakdown entry",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleEdit = (id: number) => {
     console.log('Edit breakdown:', id);
   };
 
   const handleDelete = (id: number) => {
-    console.log('Delete breakdown:', id);
-    setBreakdowns(breakdowns.filter(b => b.id !== id));
+    deleteMutation.mutate(id.toString());
   };
 
   return (
