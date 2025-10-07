@@ -52,8 +52,10 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
     // CAPA fields
     capaOperator: '',
     capaMaintenance: '',
-    capaProblemDescription: '',
+    capaWhatHappened: '',
     capaFailureMode: '',
+    capaSketch: '',
+    capaProblemDescription: '',
     capaWhy1: '',
     capaWhy1Check: '',
     capaWhy2: '',
@@ -104,8 +106,10 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
         status: initialData.status || 'open',
         capaOperator: initialData.capaOperator || '',
         capaMaintenance: initialData.capaMaintenance || '',
-        capaProblemDescription: initialData.capaProblemDescription || '',
+        capaWhatHappened: initialData.capaWhatHappened || '',
         capaFailureMode: initialData.capaFailureMode || '',
+        capaSketch: initialData.capaSketch || '',
+        capaProblemDescription: initialData.capaProblemDescription || '',
         capaWhy1: initialData.capaWhy1 || '',
         capaWhy1Check: initialData.capaWhy1Check || '',
         capaWhy2: initialData.capaWhy2 || '',
@@ -444,24 +448,49 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
 
             <div className="space-y-4 mb-6">
               <div className="space-y-2">
-                <Label htmlFor="capaProblemDescription">Problem Description</Label>
+                <Label htmlFor="capaWhatHappened">What happened and where</Label>
                 <Textarea
-                  id="capaProblemDescription"
-                  value={formData.capaProblemDescription}
-                  onChange={(e) => setFormData({ ...formData, capaProblemDescription: e.target.value })}
-                  placeholder="What happened and where"
+                  id="capaWhatHappened"
+                  value={formData.capaWhatHappened}
+                  onChange={(e) => setFormData({ ...formData, capaWhatHappened: e.target.value })}
+                  placeholder="Describe what happened and where"
                   rows={2}
-                  data-testid="textarea-capa-problem"
+                  data-testid="textarea-capa-what-happened"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="capaFailureMode">Failure Mode</Label>
+                <Label htmlFor="capaFailureMode">Failure mode</Label>
                 <Input
                   id="capaFailureMode"
                   value={formData.capaFailureMode}
                   onChange={(e) => setFormData({ ...formData, capaFailureMode: e.target.value })}
                   placeholder="Describe failure mode"
                   data-testid="input-capa-failure"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="capaSketch">Sketch</Label>
+                <Textarea
+                  id="capaSketch"
+                  value={formData.capaSketch}
+                  onChange={(e) => setFormData({ ...formData, capaSketch: e.target.value })}
+                  placeholder="Add sketch description or reference"
+                  rows={2}
+                  data-testid="textarea-capa-sketch"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <h4 className="font-medium">Problem Description</h4>
+              <div className="space-y-2">
+                <Textarea
+                  id="capaProblemDescription"
+                  value={formData.capaProblemDescription}
+                  onChange={(e) => setFormData({ ...formData, capaProblemDescription: e.target.value })}
+                  placeholder="Describe the problem in detail"
+                  rows={2}
+                  data-testid="textarea-capa-problem"
                 />
               </div>
             </div>

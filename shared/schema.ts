@@ -69,8 +69,10 @@ export const breakdowns = pgTable("breakdowns", {
   capaRequired: text("capa_required").default("no"), // yes, no
   capaOperator: text("capa_operator"),
   capaMaintenance: text("capa_maintenance"),
-  capaProblemDescription: text("capa_problem_description"),
+  capaWhatHappened: text("capa_what_happened"),
   capaFailureMode: text("capa_failure_mode"),
+  capaSketch: text("capa_sketch"),
+  capaProblemDescription: text("capa_problem_description"),
   capaWhy1: text("capa_why_1"),
   capaWhy1Check: text("capa_why_1_check"),
   capaWhy2: text("capa_why_2"),
