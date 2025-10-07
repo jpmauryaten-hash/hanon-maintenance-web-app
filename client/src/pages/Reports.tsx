@@ -10,7 +10,7 @@ import * as XLSX from 'xlsx';
 export default function Reports() {
   const { toast } = useToast();
   
-  const { data: breakdowns } = useQuery({ 
+  const { data: breakdowns } = useQuery<any[]>({ 
     queryKey: ['/api/breakdowns'],
   });
 

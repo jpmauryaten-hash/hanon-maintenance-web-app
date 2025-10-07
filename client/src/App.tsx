@@ -12,6 +12,7 @@ import BreakdownTracker from "@/pages/BreakdownTracker";
 import Reports from "@/pages/Reports";
 import MasterData from "@/pages/MasterData";
 import UserManagement from "@/pages/UserManagement";
+import Settings from "@/pages/Settings";
 import Login from "@/pages/login";
 import { AuthProvider, ProtectedRoute, useAuth } from "@/lib/auth";
 
@@ -59,6 +60,7 @@ function AuthenticatedApp() {
               <Route path="/reports" component={Reports} />
               <Route path="/master" component={MasterData} />
               <Route path="/users" component={UserManagement} />
+              <Route path="/settings" component={Settings} />
               <Route component={NotFound} />
             </Switch>
           </main>
