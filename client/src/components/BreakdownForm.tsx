@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 
 const SHIFTS = ["A", "B", "C"];
 const PRIORITIES = ["High", "Medium", "Low"];
+const STATUSES = ["open", "closed", "pending"];
 
 interface BreakdownFormProps {
   onSubmit?: (data: any) => void;
@@ -17,7 +18,7 @@ interface BreakdownFormProps {
 }
 
 export default function BreakdownForm({ onSubmit, onCancel, initialData }: BreakdownFormProps) {
-  const [formData, setFormData] = useState(initialData || {
+  const [formData, setFormData] = useState({
     date: '',
     shift: '',
     lineId: '',
@@ -43,6 +44,31 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
   const { data: machines = [] } = useQuery<any[]>({ queryKey: ["/api/machines"] });
   const { data: problemTypes = [] } = useQuery<any[]>({ queryKey: ["/api/problem-types"] });
   const { data: employees = [] } = useQuery<any[]>({ queryKey: ["/api/employees"] });
+
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        date: initialData.date || '',
+        shift: initialData.shift || '',
+        lineId: initialData.lineId || '',
+        subLineId: initialData.subLineId || '',
+        machineId: initialData.machineId || '',
+        problemTypeId: initialData.problemTypeId || '',
+        priority: initialData.priority || '',
+        actionTaken: initialData.actionTaken || '',
+        rootCause: initialData.rootCause || '',
+        startTime: initialData.startTime || '',
+        finishTime: initialData.finishTime || '',
+        totalMinutes: initialData.totalMinutes || '',
+        majorContribution: initialData.majorContribution || '',
+        majorContributionTime: initialData.majorContributionTime || '',
+        attendById: initialData.attendById || '',
+        closedById: initialData.closedById || '',
+        remark: initialData.remark || '',
+        status: initialData.status || 'open'
+      });
+    }
+  }, [initialData]);
 
   const calculateTotalTime = () => {
     if (formData.startTime && formData.finishTime) {
@@ -167,6 +193,22 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
               <SelectContent>
                 {PRIORITIES.map((priority) => (
                   <SelectItem key={priority} value={priority}>{priority}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="status">Status <span className="text-destructive">*</span></Label>
+            <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+              <SelectTrigger id="status" data-testid="select-status">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUSES.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>

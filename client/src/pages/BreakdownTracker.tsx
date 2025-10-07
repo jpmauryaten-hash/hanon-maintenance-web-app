@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function BreakdownTracker() {
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingBreakdown, setEditingBreakdown] = useState<any>(null);
   const { toast } = useToast();
 
   const { data: breakdowns = [] } = useQuery<any[]>({
@@ -42,9 +43,26 @@ export default function BreakdownTracker() {
     },
   });
 
-  const handleSubmit = (data: any) => {
-    createMutation.mutate(data);
-  };
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      return await apiRequest("PUT", `/api/breakdowns/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/breakdowns"] });
+      setEditingBreakdown(null);
+      toast({
+        title: "Success",
+        description: "Breakdown entry updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update breakdown entry",
+        variant: "destructive",
+      });
+    },
+  });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -66,12 +84,28 @@ export default function BreakdownTracker() {
     },
   });
 
-  const handleEdit = (id: number) => {
-    console.log('Edit breakdown:', id);
+  const handleSubmit = (data: any) => {
+    if (editingBreakdown) {
+      updateMutation.mutate({ id: editingBreakdown.id, data });
+    } else {
+      createMutation.mutate(data);
+    }
   };
 
-  const handleDelete = (id: number) => {
-    deleteMutation.mutate(id.toString());
+  const handleEdit = (id: string) => {
+    const breakdown = breakdowns.find((b: any) => b.id === id);
+    if (breakdown) {
+      setEditingBreakdown(breakdown);
+    }
+  };
+
+  const handleDelete = (id: string) => {
+    deleteMutation.mutate(id);
+  };
+
+  const handleCloseDialog = () => {
+    setIsFormOpen(false);
+    setEditingBreakdown(null);
   };
 
   return (
@@ -94,14 +128,15 @@ export default function BreakdownTracker() {
         onDelete={handleDelete}
       />
 
-      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+      <Dialog open={isFormOpen || !!editingBreakdown} onOpenChange={handleCloseDialog}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>New Breakdown Entry</DialogTitle>
+            <DialogTitle>{editingBreakdown ? 'Edit Breakdown Entry' : 'New Breakdown Entry'}</DialogTitle>
           </DialogHeader>
           <BreakdownForm 
             onSubmit={handleSubmit}
-            onCancel={() => setIsFormOpen(false)}
+            onCancel={handleCloseDialog}
+            initialData={editingBreakdown}
           />
         </DialogContent>
       </Dialog>

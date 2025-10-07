@@ -4,7 +4,7 @@ import { Edit, Trash2 } from "lucide-react";
 import BreakdownStatusBadge from "./BreakdownStatusBadge";
 
 interface Breakdown {
-  id: number;
+  id: string;
   date: string;
   shift: string;
   line: string;
@@ -17,8 +17,8 @@ interface Breakdown {
 
 interface BreakdownTableProps {
   breakdowns: Breakdown[];
-  onEdit?: (id: number) => void;
-  onDelete?: (id: number) => void;
+  onEdit?: (id: string) => void;
+  onDelete?: (id: string) => void;
   canEdit?: boolean;
 }
 
