@@ -6,7 +6,7 @@ interface RoleBadgeProps {
 }
 
 export default function RoleBadge({ role, size = "default" }: RoleBadgeProps) {
-  const config = {
+  const config: Record<string, { label: string; className: string }> = {
     admin: {
       label: "Admin",
       className: "bg-role-admin text-white"
@@ -25,7 +25,12 @@ export default function RoleBadge({ role, size = "default" }: RoleBadgeProps) {
     }
   };
 
-  const { label, className } = config[role];
+  const roleConfig = config[role] || {
+    label: role || "Unknown",
+    className: "bg-gray-500 text-white"
+  };
+
+  const { label, className } = roleConfig;
 
   return (
     <Badge 
