@@ -2,44 +2,54 @@ import DashboardMetricCard from "@/components/DashboardMetricCard";
 import DashboardCharts from "@/components/DashboardCharts";
 import BreakdownTable from "@/components/BreakdownTable";
 import { Activity, Clock, AlertTriangle, CheckCircle } from "lucide-react";
-
-const mockBreakdowns = [
-  {
-    id: 1,
-    date: '2025-10-07',
-    shift: 'A',
-    line: 'Line 1',
-    machine: 'CNC-101',
-    problem: 'Motor failure',
-    status: 'open' as const,
-    totalMinutes: 120,
-    attendBy: 'John Doe'
-  },
-  {
-    id: 2,
-    date: '2025-10-07',
-    shift: 'B',
-    line: 'Line 2',
-    machine: 'LATHE-205',
-    problem: 'Belt broken',
-    status: 'closed' as const,
-    totalMinutes: 45,
-    attendBy: 'Jane Smith'
-  },
-  {
-    id: 3,
-    date: '2025-10-06',
-    shift: 'C',
-    line: 'Line 1',
-    machine: 'MILL-330',
-    problem: 'Electrical issue',
-    status: 'pending' as const,
-    totalMinutes: 90,
-    attendBy: 'Mike Johnson'
-  }
-];
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 export default function Dashboard() {
+  const { data: breakdowns = [], isLoading } = useQuery<any[]>({ 
+    queryKey: ["/api/breakdowns"] 
+  });
+
+  const metrics = useMemo(() => {
+    const totalBreakdowns = breakdowns.length;
+    
+    const totalDowntimeMinutes = breakdowns.reduce((sum, b) => {
+      return sum + (parseInt(b.totalMinutes) || 0);
+    }, 0);
+    const totalDowntimeHours = Math.round(totalDowntimeMinutes / 60);
+    
+    const openIssues = breakdowns.filter(b => b.status === 'Open').length;
+    
+    const today = new Date().toISOString().split('T')[0];
+    const resolvedToday = breakdowns.filter(
+      b => b.status === 'Closed' && b.date === today
+    ).length;
+
+    return {
+      totalBreakdowns,
+      totalDowntimeHours,
+      openIssues,
+      resolvedToday
+    };
+  }, [breakdowns]);
+
+  const recentBreakdowns = useMemo(() => {
+    return [...breakdowns]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 10);
+  }, [breakdowns]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-1">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -50,33 +60,35 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <DashboardMetricCard
           title="Total Breakdowns"
-          value="24"
+          value={metrics.totalBreakdowns.toString()}
           icon={Activity}
-          trend={{ value: "12% vs last month", positive: false }}
+          data-testid="metric-total-breakdowns"
         />
         <DashboardMetricCard
           title="Total Downtime"
-          value="156h"
+          value={`${metrics.totalDowntimeHours}h`}
           icon={Clock}
-          trend={{ value: "8% vs last month", positive: true }}
+          data-testid="metric-total-downtime"
         />
         <DashboardMetricCard
           title="Open Issues"
-          value="8"
+          value={metrics.openIssues.toString()}
           icon={AlertTriangle}
+          data-testid="metric-open-issues"
         />
         <DashboardMetricCard
           title="Resolved Today"
-          value="12"
+          value={metrics.resolvedToday.toString()}
           icon={CheckCircle}
+          data-testid="metric-resolved-today"
         />
       </div>
 
-      <DashboardCharts />
+      <DashboardCharts breakdowns={breakdowns} />
 
       <div className="space-y-4">
         <h2 className="text-xl font-medium">Recent Breakdowns</h2>
-        <BreakdownTable breakdowns={mockBreakdowns} canEdit={false} />
+        <BreakdownTable breakdowns={recentBreakdowns} canEdit={false} />
       </div>
     </div>
   );

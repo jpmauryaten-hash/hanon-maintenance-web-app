@@ -1,21 +1,52 @@
 import { Card } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 
-const shiftData = [
-  { shift: "Shift A", breakdowns: 12, downtime: 420 },
-  { shift: "Shift B", breakdowns: 8, downtime: 280 },
-  { shift: "Shift C", breakdowns: 4, downtime: 150 }
-];
+interface DashboardChartsProps {
+  breakdowns: any[];
+}
 
-const topMachinesData = [
-  { machine: "CNC-101", downtime: 240 },
-  { machine: "LATHE-205", downtime: 180 },
-  { machine: "MILL-330", downtime: 145 },
-  { machine: "DRILL-412", downtime: 120 },
-  { machine: "PRESS-508", downtime: 95 }
-];
+export default function DashboardCharts({ breakdowns }: DashboardChartsProps) {
+  const { data: machines = [] } = useQuery<any[]>({ queryKey: ["/api/machines"] });
 
-export default function DashboardCharts() {
+  const shiftData = useMemo(() => {
+    const shiftMap = new Map<string, { shift: string; breakdowns: number; downtime: number }>();
+    
+    breakdowns.forEach(breakdown => {
+      const shift = `Shift ${breakdown.shift}`;
+      const existing = shiftMap.get(shift) || { shift, breakdowns: 0, downtime: 0 };
+      existing.breakdowns += 1;
+      existing.downtime += parseInt(breakdown.totalMinutes) || 0;
+      shiftMap.set(shift, existing);
+    });
+
+    return Array.from(shiftMap.values()).sort((a, b) => a.shift.localeCompare(b.shift));
+  }, [breakdowns]);
+
+  const topMachinesData = useMemo(() => {
+    const machineMap = new Map<string, number>();
+    
+    breakdowns.forEach(breakdown => {
+      const machineId = breakdown.machineId;
+      const downtime = parseInt(breakdown.totalMinutes) || 0;
+      machineMap.set(machineId, (machineMap.get(machineId) || 0) + downtime);
+    });
+
+    const machineEntries = Array.from(machineMap.entries())
+      .map(([machineId, downtime]) => {
+        const machine = machines.find(m => m.id === machineId);
+        return {
+          machine: machine?.name || 'Unknown',
+          downtime
+        };
+      })
+      .sort((a, b) => b.downtime - a.downtime)
+      .slice(0, 5);
+
+    return machineEntries;
+  }, [breakdowns, machines]);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <Card className="p-6">
