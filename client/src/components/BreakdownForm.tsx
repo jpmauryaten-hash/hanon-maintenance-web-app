@@ -10,6 +10,16 @@ import { useQuery } from "@tanstack/react-query";
 const SHIFTS = ["A", "B", "C"];
 const PRIORITIES = ["High", "Medium", "Low"];
 const STATUSES = ["open", "closed", "pending"];
+const MAJOR_CONTRIBUTIONS = [
+  "Spare Not Available",
+  "Delay by the Store",
+  "Machine Not released by Production",
+  "Technical Support required from other party",
+  "Busy on other BD/Maint. Work",
+  "Machine accident/ wrong Operating",
+  "Problem came after changeover",
+  "Aging Issue"
+];
 
 interface BreakdownFormProps {
   onSubmit?: (data: any) => void;
@@ -474,14 +484,16 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
 
         <div className="space-y-2">
           <Label htmlFor="majorContribution">Major Contribution</Label>
-          <Textarea
-            id="majorContribution"
-            value={formData.majorContribution}
-            onChange={(e) => setFormData({ ...formData, majorContribution: e.target.value })}
-            placeholder="Describe major contribution"
-            rows={2}
-            data-testid="textarea-majorcontribution"
-          />
+          <Select value={formData.majorContribution} onValueChange={(value) => setFormData({ ...formData, majorContribution: value })}>
+            <SelectTrigger id="majorContribution" data-testid="select-majorcontribution">
+              <SelectValue placeholder="Select major contribution" />
+            </SelectTrigger>
+            <SelectContent>
+              {MAJOR_CONTRIBUTIONS.map((contribution) => (
+                <SelectItem key={contribution} value={contribution}>{contribution}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="space-y-2">
