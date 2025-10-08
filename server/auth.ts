@@ -1,14 +1,14 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import session from "express-session";
-import createMemoryStore from "memorystore";
+import connectPgSimple from "connect-pg-simple";
 import bcrypt from "bcrypt";
 import { db } from "./db";
 import { users, type User } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import type { Express } from "express";
 
-const MemoryStore = createMemoryStore(session);
+const PgStore = connectPgSimple(session);
 
 // Configure passport local strategy
 passport.use(
@@ -61,17 +61,22 @@ passport.deserializeUser(async (id: string, done) => {
 });
 
 export function setupAuth(app: Express) {
-  // Session configuration
+  // Session configuration with PostgreSQL store
   app.use(
     session({
       secret: process.env.SESSION_SECRET || "breakdown-tracker-secret-key-change-in-production",
       resave: false,
       saveUninitialized: false,
-      store: new MemoryStore({
-        checkPeriod: 86400000, // prune expired entries every 24h
+      store: new PgStore({
+        conObject: {
+          connectionString: process.env.DATABASE_URL,
+          ssl: process.env.NODE_ENV === "production",
+        },
+        tableName: "session",
+        createTableIfMissing: true,
       }),
       cookie: {
-        secure: process.env.NODE_ENV === "production",
+        secure: false, // Set to true only if you have HTTPS
         httpOnly: true,
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       },

@@ -60,13 +60,13 @@ export async function seedDatabase() {
 
     // Create lines
     const lineRecords = await db.insert(lines).values(
-      MASTER_DATA.lines.map(name => ({ name, description: `${name} production line` }))
+      MASTER_DATA.lines.map((name: string) => ({ name, description: `${name} production line` }))
     ).returning();
     console.log(`✓ Created ${lineRecords.length} lines`);
 
     // Create sub lines (assign to first line for now)
     const subLineRecords = await db.insert(subLines).values(
-      MASTER_DATA.sub_lines.map(name => ({ 
+      MASTER_DATA.sub_lines.map((name: string) => ({ 
         name, 
         lineId: lineRecords[0].id 
       }))
@@ -75,7 +75,7 @@ export async function seedDatabase() {
 
     // Create machines
     const machineRecords = await db.insert(machines).values(
-      MASTER_DATA.machines.map(name => ({
+      MASTER_DATA.machines.map((name: string) => ({
         name,
         lineId: lineRecords[0].id,
         type: "Production Machine"
@@ -85,7 +85,7 @@ export async function seedDatabase() {
 
     // Create problem types
     const problemTypeRecords = await db.insert(problemTypes).values(
-      MASTER_DATA.problem_types.map(name => ({ name, description: name }))
+      MASTER_DATA.problem_types.map((name: string) => ({ name, description: name }))
     ).returning();
     console.log(`✓ Created ${problemTypeRecords.length} problem types`);
 

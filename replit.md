@@ -36,7 +36,7 @@ Preferred communication style: Simple, everyday language.
 **Server Framework**
 - Express.js with TypeScript for RESTful API endpoints
 - Session-based authentication using Passport.js with Local Strategy
-- In-memory session storage (MemoryStore) for development
+- PostgreSQL session storage using connect-pg-simple for production persistence
 - Middleware for request logging and JSON response capturing
 
 **API Structure**
@@ -83,7 +83,7 @@ Preferred communication style: Simple, everyday language.
 - `bcrypt`: Password hashing for user authentication
 - `passport` & `passport-local`: Authentication middleware
 - `express-session`: Session management
-- `connect-pg-simple`: PostgreSQL session store (configured but may use MemoryStore)
+- `connect-pg-simple`: PostgreSQL session store for persistent sessions
 - `@radix-ui/*`: Unstyled accessible component primitives
 - `@tanstack/react-query`: Server state management
 - `recharts`: Data visualization for analytics charts
