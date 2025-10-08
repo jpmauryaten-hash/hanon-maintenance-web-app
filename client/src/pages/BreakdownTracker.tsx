@@ -430,15 +430,11 @@ function BreakdownView({ breakdown }: { breakdown: any }) {
           <div className="border rounded-md">
             <table className="w-full text-sm">
               <tbody>
-                <tr className="border-b">
-                  <td className="font-semibold p-3 bg-muted/50 w-1/3">Prepared By</td>
+                <tr>
+                  <td className="font-semibold p-3 bg-muted/50">Prepared By</td>
                   <td className="p-3">{breakdown.capaPreparedBy || '-'}</td>
-                </tr>
-                <tr className="border-b">
                   <td className="font-semibold p-3 bg-muted/50">Checked By</td>
                   <td className="p-3">{breakdown.capaCheckedBy || '-'}</td>
-                </tr>
-                <tr>
                   <td className="font-semibold p-3 bg-muted/50">Reviewed By</td>
                   <td className="p-3">{breakdown.capaReviewedBy || '-'}</td>
                 </tr>
