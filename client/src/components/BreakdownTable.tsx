@@ -1,6 +1,6 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2 } from "lucide-react";
+import { Edit, Trash2, Eye } from "lucide-react";
 import BreakdownStatusBadge from "./BreakdownStatusBadge";
 
 interface Breakdown {
@@ -17,6 +17,7 @@ interface Breakdown {
 
 interface BreakdownTableProps {
   breakdowns: Breakdown[];
+  onView?: (id: string) => void;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   canEdit?: boolean;
@@ -24,6 +25,7 @@ interface BreakdownTableProps {
 
 export default function BreakdownTable({ 
   breakdowns, 
+  onView,
   onEdit, 
   onDelete,
   canEdit = false 
@@ -72,6 +74,14 @@ export default function BreakdownTable({
               {canEdit && (
                 <TableCell>
                   <div className="flex gap-2">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => onView?.(breakdown.id)}
+                      data-testid={`button-view-${breakdown.id}`}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
                     <Button
                       size="icon"
                       variant="ghost"
