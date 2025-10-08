@@ -18,11 +18,11 @@ export default function Dashboard() {
     }, 0);
     const totalDowntimeHours = Math.round(totalDowntimeMinutes / 60);
     
-    const openIssues = breakdowns.filter(b => b.status === 'Open').length;
+    const openIssues = breakdowns.filter(b => b.status === 'open').length;
     
     const today = new Date().toISOString().split('T')[0];
     const resolvedToday = breakdowns.filter(
-      b => b.status === 'Closed' && b.date === today
+      b => b.status === 'closed' && b.date === today
     ).length;
 
     return {
