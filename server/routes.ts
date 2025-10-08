@@ -344,6 +344,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           closedById: breakdowns.closedById,
           remark: breakdowns.remark,
           createdAt: breakdowns.createdAt,
+          capaRequired: breakdowns.capaRequired,
+          capaOperator: breakdowns.capaOperator,
+          capaMaintenance: breakdowns.capaMaintenance,
+          capaWhatHappened: breakdowns.capaWhatHappened,
+          capaFailureMode: breakdowns.capaFailureMode,
+          capaSketch: breakdowns.capaSketch,
+          capaProblemDescriptions: breakdowns.capaProblemDescriptions,
+          capaRootCauses: breakdowns.capaRootCauses,
+          capaPreventiveActions: breakdowns.capaPreventiveActions,
+          capaPreparedBy: breakdowns.capaPreparedBy,
+          capaCheckedBy: breakdowns.capaCheckedBy,
+          capaReviewedBy: breakdowns.capaReviewedBy,
         })
         .from(breakdowns)
         .leftJoin(lines, eq(breakdowns.lineId, lines.id))
