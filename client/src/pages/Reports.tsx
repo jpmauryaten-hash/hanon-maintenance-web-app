@@ -14,6 +14,12 @@ export default function Reports() {
     queryKey: ['/api/breakdowns'],
   });
 
+  const { data: lines = [] } = useQuery<any[]>({ queryKey: ["/api/lines"] });
+  const { data: subLines = [] } = useQuery<any[]>({ queryKey: ["/api/sub-lines"] });
+  const { data: machines = [] } = useQuery<any[]>({ queryKey: ["/api/machines"] });
+  const { data: problemTypes = [] } = useQuery<any[]>({ queryKey: ["/api/problem-types"] });
+  const { data: employees = [] } = useQuery<any[]>({ queryKey: ["/api/employees"] });
+
   const handleExport = () => {
     if (!breakdowns || breakdowns.length === 0) {
       toast({
@@ -24,23 +30,74 @@ export default function Reports() {
       return;
     }
 
-    const exportData = breakdowns.map((b: any) => ({
-      Date: b.date,
-      Shift: b.shift,
-      Line: b.line?.name,
-      'Sub Line': b.subLine?.name || '-',
-      Machine: b.machine?.name,
-      'Problem Type': b.problemType?.name,
-      Priority: b.priority,
-      Status: b.status,
-      'Start Time': b.startTime,
-      'Finish Time': b.finishTime || '-',
-      'Total Minutes': b.totalMinutes || '-',
-      'Attend By': b.attendBy?.name,
-      'Closed By': b.closedBy?.name || '-',
-      'Action Taken': b.actionTaken || '-',
-      'Root Cause': b.rootCause || '-',
-    }));
+    const exportData = breakdowns.map((b: any) => {
+      const line = lines.find(l => l.id === b.lineId);
+      const subLine = subLines.find(sl => sl.id === b.subLineId);
+      const machine = machines.find(m => m.id === b.machineId);
+      const problemType = problemTypes.find(pt => pt.id === b.problemTypeId);
+      const attendBy = employees.find(e => e.id === b.attendById);
+      const closedBy = employees.find(e => e.id === b.closedById);
+
+      let problemDescriptions = [];
+      let rootCauses = [];
+      let preventiveActions = [];
+
+      try {
+        if (b.capaProblemDescriptions) {
+          problemDescriptions = JSON.parse(b.capaProblemDescriptions);
+        }
+      } catch {}
+
+      try {
+        if (b.capaRootCauses) {
+          rootCauses = JSON.parse(b.capaRootCauses);
+        }
+      } catch {}
+
+      try {
+        if (b.capaPreventiveActions) {
+          preventiveActions = JSON.parse(b.capaPreventiveActions);
+        }
+      } catch {}
+
+      return {
+        Date: b.date,
+        Shift: b.shift,
+        Line: line?.name || '-',
+        'Sub Line': subLine?.name || '-',
+        Machine: machine?.name || '-',
+        'Problem Type': problemType?.name || '-',
+        Priority: b.priority,
+        Status: b.status,
+        'Start Time': b.startTime,
+        'Finish Time': b.finishTime || '-',
+        'Total Minutes': b.totalMinutes || '-',
+        'Action Taken': b.actionTaken || '-',
+        'Root Cause': b.rootCause || '-',
+        'Major Contribution': b.majorContribution || '-',
+        'Major Contribution Time': b.majorContributionTime || '-',
+        'Attended By': attendBy?.name || '-',
+        'Closed By': closedBy?.name || '-',
+        'Remark': b.remark || '-',
+        'CAPA Operator': b.capaOperator || '-',
+        'CAPA Maintenance': b.capaMaintenance || '-',
+        'CAPA What Happened': b.capaWhatHappened || '-',
+        'CAPA Failure Mode': b.capaFailureMode || '-',
+        'CAPA Sketch': b.capaSketch || '-',
+        'CAPA Problem Descriptions': problemDescriptions.map((p: any, i: number) => 
+          `Problem ${i + 1}: ${p.description || ''} | Why1: ${p.why1 || ''} | Why2: ${p.why2 || ''} | Why3: ${p.why3 || ''} | Why4: ${p.why4 || ''} | Why5: ${p.why5 || ''} | Category: ${p.category || ''} | Corrective Action: ${p.correctiveAction || ''} | Preventive Action: ${p.preventiveAction || ''}`
+        ).join(' || ') || '-',
+        'CAPA Root Causes': rootCauses.map((rc: any, i: number) => 
+          `${i + 1}. Root Cause: ${rc.rootCause || ''} | Category: ${rc.category || ''} | Countermeasures: ${rc.countermeasures || ''} | Evidence Before: ${rc.evidenceBefore || ''} | Evidence After: ${rc.evidenceAfter || ''}`
+        ).join(' || ') || '-',
+        'CAPA Preventive Actions': preventiveActions.map((pa: any, i: number) => 
+          `${i + 1}. Description: ${pa.description || ''} | By Whom: ${pa.byWhom || ''} | Action: ${pa.action || ''} | Evidence 1: ${pa.evidence1 || ''} | Evidence 2: ${pa.evidence2 || ''}`
+        ).join(' || ') || '-',
+        'CAPA Prepared By': b.capaPreparedBy || '-',
+        'CAPA Checked By': b.capaCheckedBy || '-',
+        'CAPA Reviewed By': b.capaReviewedBy || '-',
+      };
+    });
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
@@ -49,7 +106,7 @@ export default function Reports() {
     
     toast({
       title: "Export Successful",
-      description: "Breakdown data exported to Excel",
+      description: `${breakdowns.length} breakdown records exported to Excel`,
     });
   };
 
