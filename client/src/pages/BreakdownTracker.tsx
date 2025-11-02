@@ -202,7 +202,8 @@ function BreakdownView({ breakdown }: { breakdown: any }) {
     }
   } catch {}
 
-  const isCapaRequired = breakdown.priority === 'High' && parseInt(breakdown.totalMinutes || '0') >= 45;
+  const isCapaRequired =
+    breakdown.priority === 'High' && parseInt(breakdown.totalMinutes || '0') >= 45;
 
   return (
     <div className="space-y-6">

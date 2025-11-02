@@ -2,7 +2,7 @@ import BreakdownTable from '../BreakdownTable';
 
 const mockBreakdowns = [
   {
-    id: 1,
+    id: "1",
     date: '2025-10-07',
     shift: 'A',
     line: 'Line 1',
@@ -13,7 +13,7 @@ const mockBreakdowns = [
     attendBy: 'John Doe'
   },
   {
-    id: 2,
+    id: "2",
     date: '2025-10-07',
     shift: 'B',
     line: 'Line 2',

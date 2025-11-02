@@ -11,6 +11,9 @@ import Dashboard from "@/pages/Dashboard";
 import BreakdownTracker from "@/pages/BreakdownTracker";
 import Reports from "@/pages/Reports";
 import MasterData from "@/pages/MasterData";
+import MaintenancePlanner from "@/pages/MaintenancePlanner";
+import YearlyPlanner from "@/pages/YearlyPlanner";
+import YearlyPlanMonthView from "@/pages/YearlyPlanMonthView";
 import UserManagement from "@/pages/UserManagement";
 import Settings from "@/pages/Settings";
 import Login from "@/pages/login";
@@ -59,6 +62,9 @@ function AuthenticatedApp() {
               <Route path="/tracker" component={BreakdownTracker} />
               <Route path="/reports" component={Reports} />
               <Route path="/master" component={MasterData} />
+              <Route path="/maintenance" component={MaintenancePlanner} />
+              <Route path="/yearly-planner" component={YearlyPlanner} />
+              <Route path="/yearly-planner/month/:month" component={YearlyPlanMonthView} />
               <Route path="/users" component={UserManagement} />
               <Route path="/settings" component={Settings} />
               <Route component={NotFound} />

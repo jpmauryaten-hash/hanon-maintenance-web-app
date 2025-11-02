@@ -13,7 +13,7 @@ try {
 } catch (error) {
   console.error("Failed to load master data JSON, using defaults");
   MASTER_DATA = {
-    lines: ["FRONT LINE", "FT & MANIFOLD  LINE", "IMM & PRESS SHOP"],
+    lines: ["WCAC", "Final Line", "Mainifold", "Tool & Die", "Front Line", "EGR", "FDM"],
     sub_lines: ["AC LINE", "CAB LINE", "CAC LINE"],
     machines: ["CORE BUILDER -5 MATRIX (RAD)", "FIN MILL -2"],
     problem_types: ["B/D", "SAFETY /OTHER"],

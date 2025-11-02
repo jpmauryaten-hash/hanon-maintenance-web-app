@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, date, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -34,9 +34,13 @@ export const subLines = pgTable("sub_lines", {
 export const machines = pgTable("machines", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
+  code: text("code"),
   lineId: varchar("line_id").references(() => lines.id),
   subLineId: varchar("sub_line_id").references(() => subLines.id),
   type: text("type"),
+  maintenanceFrequency: text("maintenance_frequency"),
+  pmPlanYear: text("pm_plan_year"),
+  uptime: integer("uptime"),
 });
 
 export const problemTypes = pgTable("problem_types", {
@@ -44,6 +48,54 @@ export const problemTypes = pgTable("problem_types", {
   name: text("name").notNull().unique(),
   description: text("description"),
 });
+
+export const maintenanceSchedules = pgTable("maintenance_schedules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  machineId: varchar("machine_id").notNull().references(() => machines.id),
+  machineCode: text("machine_code"),
+  scheduledDate: date("scheduled_date").notNull(),
+  shift: text("shift"),
+  status: text("status").notNull().default("scheduled"),
+  maintenanceFrequency: text("maintenance_frequency"),
+  notes: text("notes"),
+  emailRecipients: text("email_recipients"),
+  emailTemplate: text("email_template"),
+  preNotificationSent: boolean("pre_notification_sent").default(false),
+  createdById: varchar("created_by_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const maintenanceYearlyPlans = pgTable(
+  "maintenance_yearly_plans",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    machineId: varchar("machine_id").notNull().references(() => machines.id),
+    planYear: integer("plan_year").notNull(),
+    frequency: text("frequency"),
+    jan: text("jan"),
+    feb: text("feb"),
+    mar: text("mar"),
+    apr: text("apr"),
+    may: text("may"),
+    jun: text("jun"),
+    jul: text("jul"),
+    aug: text("aug"),
+    sep: text("sep"),
+    oct: text("oct"),
+    nov: text("nov"),
+    dec: text("dec"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => ({
+    machineYearIdx: uniqueIndex("maintenance_yearly_plans_machine_year_idx").on(
+      table.machineId,
+      table.planYear,
+    ),
+  }),
+);
 
 export const breakdowns = pgTable("breakdowns", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -104,6 +156,21 @@ export const insertMachineSchema = createInsertSchema(machines).omit({
   id: true,
 });
 
+export const insertMaintenanceScheduleSchema = createInsertSchema(maintenanceSchedules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+  preNotificationSent: true,
+  status: true,
+});
+
+export const insertMaintenanceYearlyPlanSchema = createInsertSchema(maintenanceYearlyPlans).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertProblemTypeSchema = createInsertSchema(problemTypes).omit({
   id: true,
 });
@@ -129,6 +196,12 @@ export type InsertSubLine = z.infer<typeof insertSubLineSchema>;
 
 export type Machine = typeof machines.$inferSelect;
 export type InsertMachine = z.infer<typeof insertMachineSchema>;
+
+export type MaintenanceSchedule = typeof maintenanceSchedules.$inferSelect;
+export type InsertMaintenanceSchedule = z.infer<typeof insertMaintenanceScheduleSchema>;
+
+export type MaintenanceYearlyPlan = typeof maintenanceYearlyPlans.$inferSelect;
+export type InsertMaintenanceYearlyPlan = z.infer<typeof insertMaintenanceYearlyPlanSchema>;
 
 export type ProblemType = typeof problemTypes.$inferSelect;
 export type InsertProblemType = z.infer<typeof insertProblemTypeSchema>;

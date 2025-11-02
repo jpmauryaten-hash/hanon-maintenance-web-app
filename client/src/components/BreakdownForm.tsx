@@ -124,7 +124,7 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
   useEffect(() => {
     if (initialData) {
       setFormData({
-        date: initialData.date || '',
+        date: initialData.date ? String(initialData.date).slice(0, 10) : '',
         shift: initialData.shift || '',
         lineId: initialData.lineId || '',
         subLineId: initialData.subLineId || '',
@@ -181,6 +181,17 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
     }
   }, [initialData]);
 
+  const filteredSubLines = formData.lineId
+    ? subLines.filter((subLine: any) => subLine.lineId === formData.lineId)
+    : [];
+
+  const filteredMachines = formData.subLineId
+    ? machines.filter(
+        (machine: any) =>
+          machine.subLineId === formData.subLineId && machine.lineId === formData.lineId
+      )
+    : [];
+
   const calculateTotalTime = () => {
     if (formData.startTime && formData.finishTime) {
       const start = new Date(`2000-01-01T${formData.startTime}`);
@@ -195,7 +206,8 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
     calculateTotalTime();
   }, [formData.startTime, formData.finishTime]);
 
-  const isCapaRequired = formData.priority === 'High' && parseInt(formData.totalMinutes || '0') >= 45;
+  const isCapaRequired =
+    formData.priority === 'High' && parseInt(formData.totalMinutes || '0') >= 45;
 
   const isCapaComplete = () => {
     if (!isCapaRequired) return true;
@@ -259,7 +271,19 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
     e.preventDefault();
     
     if (formData.status === 'closed' && isCapaRequired && !isCapaComplete()) {
-      alert('CAPA sheet must be completed before closing this breakdown (Priority: High, Time: ≥45 min)');
+      alert(
+        'CAPA sheet must be completed before closing this breakdown (Priority: High, Time: >=45 min)'
+      );
+      return;
+    }
+
+    if (!formData.date) {
+      alert('Please select a date.');
+      return;
+    }
+
+    if (!formData.lineId || !formData.subLineId || !formData.machineId) {
+      alert('Please select a line, sub line, and machine.');
       return;
     }
 
@@ -288,7 +312,7 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
               id="date"
               type="date"
               value={formData.date}
-              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+              onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
               required
               data-testid="input-date"
             />
@@ -310,9 +334,15 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
 
           <div className="space-y-2">
             <Label htmlFor="line">Line <span className="text-destructive">*</span></Label>
-            <Select value={formData.lineId} onValueChange={(value) => setFormData({ ...formData, lineId: value })}>
+            <Select
+              value={formData.lineId}
+              onValueChange={(value) =>
+                setFormData((prev) => ({ ...prev, lineId: value, subLineId: '', machineId: '' }))
+              }
+              disabled={lines.length === 0}
+            >
               <SelectTrigger id="line" data-testid="select-line">
-                <SelectValue placeholder="Select line" />
+                <SelectValue placeholder={lines.length === 0 ? "No lines available" : "Select line"} />
               </SelectTrigger>
               <SelectContent>
                 {lines.map((line: any) => (
@@ -323,13 +353,27 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="subLine">Sub Line</Label>
-            <Select value={formData.subLineId} onValueChange={(value) => setFormData({ ...formData, subLineId: value })}>
+            <Label htmlFor="subLine">Sub Line <span className="text-destructive">*</span></Label>
+            <Select
+              value={formData.subLineId}
+              onValueChange={(value) =>
+                setFormData((prev) => ({ ...prev, subLineId: value, machineId: '' }))
+              }
+              disabled={!formData.lineId || filteredSubLines.length === 0}
+            >
               <SelectTrigger id="subLine" data-testid="select-subline">
-                <SelectValue placeholder="Select sub line" />
+                <SelectValue
+                  placeholder={
+                    !formData.lineId
+                      ? "Select line first"
+                      : filteredSubLines.length === 0
+                        ? "No sub lines available"
+                        : "Select sub line"
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
-                {subLines.map((subLine: any) => (
+                {filteredSubLines.map((subLine: any) => (
                   <SelectItem key={subLine.id} value={subLine.id}>{subLine.name}</SelectItem>
                 ))}
               </SelectContent>
@@ -338,12 +382,24 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
 
           <div className="space-y-2">
             <Label htmlFor="machine">Machine <span className="text-destructive">*</span></Label>
-            <Select value={formData.machineId} onValueChange={(value) => setFormData({ ...formData, machineId: value })}>
+            <Select
+              value={formData.machineId}
+              onValueChange={(value) => setFormData((prev) => ({ ...prev, machineId: value }))}
+              disabled={!formData.subLineId || filteredMachines.length === 0}
+            >
               <SelectTrigger id="machine" data-testid="select-machine">
-                <SelectValue placeholder="Select machine" />
+                <SelectValue
+                  placeholder={
+                    !formData.subLineId
+                      ? "Select sub line first"
+                      : filteredMachines.length === 0
+                        ? "No machines available"
+                        : "Select machine"
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
-                {machines.map((machine: any) => (
+                {filteredMachines.map((machine: any) => (
                   <SelectItem key={machine.id} value={machine.id}>{machine.name}</SelectItem>
                 ))}
               </SelectContent>

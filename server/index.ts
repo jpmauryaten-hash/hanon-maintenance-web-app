@@ -1,7 +1,9 @@
+import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { seedDatabase } from "./seed";
+import { ensureMaintenanceScheduleShiftColumn, ensureMaintenanceYearlyPlansTable } from "./ensureTables";
 import { setupAuth } from "./auth";
 
 const app = express();
@@ -47,6 +49,16 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await ensureMaintenanceYearlyPlansTable().catch((error) => {
+    console.error("Failed to ensure maintenance_yearly_plans table:", error);
+    throw error;
+  });
+
+  await ensureMaintenanceScheduleShiftColumn().catch((error) => {
+    console.error("Failed to ensure maintenance_schedules shift column:", error);
+    throw error;
+  });
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

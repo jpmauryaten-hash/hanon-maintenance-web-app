@@ -104,7 +104,10 @@ export function hasRole(...roles: string[]) {
     }
 
     const user = req.user as User;
-    if (roles.includes(user.role)) {
+    const allowedRoles = roles.map((role) => role.toLowerCase());
+    const userRole = (user.role || "").toLowerCase();
+
+    if (allowedRoles.includes(userRole)) {
       return next();
     }
 
