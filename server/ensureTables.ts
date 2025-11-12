@@ -37,3 +37,46 @@ export async function ensureMaintenanceScheduleShiftColumn(): Promise<void> {
     ADD COLUMN IF NOT EXISTS "shift" text;
   `);
 }
+
+export async function ensureMaintenanceScheduleChecksheetColumn(): Promise<void> {
+  await db.execute(sql`
+    ALTER TABLE "maintenance_schedules"
+    ADD COLUMN IF NOT EXISTS "checksheet_path" text;
+  `);
+}
+
+export async function ensureMaintenanceScheduleCompletionColumns(): Promise<void> {
+  await db.execute(sql`
+    ALTER TABLE "maintenance_schedules"
+    ADD COLUMN IF NOT EXISTS "completion_remark" text;
+  `);
+
+  await db.execute(sql`
+    ALTER TABLE "maintenance_schedules"
+    ADD COLUMN IF NOT EXISTS "completion_attachment_path" text;
+  `);
+
+  await db.execute(sql`
+    ALTER TABLE "maintenance_schedules"
+    ADD COLUMN IF NOT EXISTS "previous_scheduled_date" date;
+  `);
+}
+
+export async function ensureMaintenanceScheduleHistoryTable(): Promise<void> {
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS "maintenance_schedule_history" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      "schedule_id" uuid NOT NULL REFERENCES "maintenance_schedules"("id") ON DELETE CASCADE,
+      "previous_scheduled_date" date NOT NULL,
+      "new_scheduled_date" date NOT NULL,
+      "reason" text,
+      "changed_by_id" varchar REFERENCES "users"("id"),
+      "created_at" timestamp DEFAULT now()
+    );
+  `);
+
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS "maintenance_schedule_history_schedule_id_idx"
+    ON "maintenance_schedule_history" ("schedule_id");
+  `);
+}

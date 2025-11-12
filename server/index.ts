@@ -1,9 +1,15 @@
-import "dotenv/config";
+﻿import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { seedDatabase } from "./seed";
-import { ensureMaintenanceScheduleShiftColumn, ensureMaintenanceYearlyPlansTable } from "./ensureTables";
+import {
+  ensureMaintenanceScheduleShiftColumn,
+  ensureMaintenanceYearlyPlansTable,
+  ensureMaintenanceScheduleChecksheetColumn,
+  ensureMaintenanceScheduleCompletionColumns,
+  ensureMaintenanceScheduleHistoryTable,
+} from "./ensureTables";
 import { setupAuth } from "./auth";
 
 const app = express();
@@ -56,6 +62,21 @@ app.use((req, res, next) => {
 
   await ensureMaintenanceScheduleShiftColumn().catch((error) => {
     console.error("Failed to ensure maintenance_schedules shift column:", error);
+    throw error;
+  });
+
+  await ensureMaintenanceScheduleChecksheetColumn().catch((error) => {
+    console.error("Failed to ensure maintenance_schedules checksheet column:", error);
+    throw error;
+  });
+
+  await ensureMaintenanceScheduleCompletionColumns().catch((error) => {
+    console.error("Failed to ensure maintenance_schedules completion columns:", error);
+    throw error;
+  });
+
+  await ensureMaintenanceScheduleHistoryTable().catch((error) => {
+    console.error("Failed to ensure maintenance_schedule_history table:", error);
     throw error;
   });
 

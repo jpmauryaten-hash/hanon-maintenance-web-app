@@ -1,12 +1,28 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { db } from "./db";
 import { passport, isAuthenticated, hasRole } from "./auth";
-import { users, breakdowns, lines, subLines, machines, problemTypes, employees, maintenanceSchedules, maintenanceYearlyPlans, type InsertMaintenanceYearlyPlan } from "@shared/schema";
+import {
+  users,
+  breakdowns,
+  lines,
+  subLines,
+  machines,
+  problemTypes,
+  employees,
+  maintenanceSchedules,
+  maintenanceScheduleHistory,
+  maintenanceYearlyPlans,
+  type InsertMaintenanceYearlyPlan,
+} from "@shared/schema";
 import { insertBreakdownSchema } from "@shared/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, asc } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import { startMaintenanceScheduler, sendMaintenanceCompletionNotification } from "./maintenance-scheduler";
+import multer, { type FileFilterCallback } from "multer";
+import { randomBytes } from "crypto";
+import { promises as fs } from "fs";
+import path from "path";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Helper to sanitize user object (remove password)
@@ -14,6 +30,133 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const { password, ...safeUser } = user;
     return safeUser;
   };
+
+  const toDateString = (value: unknown): string | null => {
+    if (!value) {
+      return null;
+    }
+    if (value instanceof Date) {
+      return value.toISOString().split("T")[0];
+    }
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return null;
+      }
+      const tIndex = trimmed.indexOf("T");
+      return tIndex === -1 ? trimmed : trimmed.slice(0, tIndex);
+    }
+    return null;
+  };
+
+  type RescheduleHistoryEntry = {
+    previousScheduledDate: string;
+    newScheduledDate: string;
+    reason: string | null;
+    changedAt: string | null;
+    changedById: string | null;
+  };
+
+  const fetchRescheduleHistoryMap = async (
+    scheduleIds: string[],
+  ): Promise<Map<string, RescheduleHistoryEntry[]>> => {
+    const historyMap = new Map<string, RescheduleHistoryEntry[]>();
+    if (scheduleIds.length === 0) {
+      return historyMap;
+    }
+
+    const rows = await db
+      .select({
+        scheduleId: maintenanceScheduleHistory.scheduleId,
+        previousScheduledDate: maintenanceScheduleHistory.previousScheduledDate,
+        newScheduledDate: maintenanceScheduleHistory.newScheduledDate,
+        reason: maintenanceScheduleHistory.reason,
+        changedById: maintenanceScheduleHistory.changedById,
+        createdAt: maintenanceScheduleHistory.createdAt,
+      })
+      .from(maintenanceScheduleHistory)
+      .where(inArray(maintenanceScheduleHistory.scheduleId, scheduleIds))
+      .orderBy(
+        asc(maintenanceScheduleHistory.previousScheduledDate),
+        asc(maintenanceScheduleHistory.createdAt),
+      );
+
+    for (const row of rows) {
+      const previousScheduledDate = toDateString(row.previousScheduledDate);
+      const newScheduledDate = toDateString(row.newScheduledDate);
+      if (!previousScheduledDate || !newScheduledDate) {
+        continue;
+      }
+
+      const entry: RescheduleHistoryEntry = {
+        previousScheduledDate,
+        newScheduledDate,
+        reason: typeof row.reason === "string" && row.reason.trim().length > 0 ? row.reason.trim() : null,
+        changedAt:
+          row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt ?? null,
+        changedById: typeof row.changedById === "string" ? row.changedById : null,
+      };
+
+      const list = historyMap.get(row.scheduleId) ?? [];
+      list.push(entry);
+      historyMap.set(row.scheduleId, list);
+    }
+
+    historyMap.forEach((list) => {
+      list.sort((a, b) => {
+        if (a.previousScheduledDate === b.previousScheduledDate) {
+          return (a.changedAt ?? "").localeCompare(b.changedAt ?? "");
+        }
+        return a.previousScheduledDate.localeCompare(b.previousScheduledDate);
+      });
+    });
+
+    return historyMap;
+  };
+
+  const fetchRescheduleHistoryForId = async (scheduleId: string): Promise<RescheduleHistoryEntry[]> => {
+    if (!scheduleId) {
+      return [];
+    }
+    const historyMap = await fetchRescheduleHistoryMap([scheduleId]);
+    return historyMap.get(scheduleId) ?? [];
+  };
+
+  const CHECKSHEET_DIR = path.join(process.cwd(), "uploads", "checksheets");
+  const COMPLETION_DIR = path.join(process.cwd(), "uploads", "completion-docs");
+  const allowedChecksheetExtensions = new Set([".pdf", ".doc", ".docx", ".xls", ".xlsx"]);
+  const allowedCompletionExtensions = new Set([
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".jpg",
+    ".jpeg",
+    ".png",
+  ]);
+  const checksheetUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 20 * 1024 * 1024 },
+    fileFilter: (_req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
+      const ext = path.extname(file.originalname || "").toLowerCase();
+      if (!allowedChecksheetExtensions.has(ext)) {
+        return cb(new Error("Unsupported file type. Allowed: PDF, DOC, DOCX, XLS, XLSX"));
+      }
+      cb(null, true);
+    },
+  });
+  const completionUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 20 * 1024 * 1024 },
+    fileFilter: (_req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
+      const ext = path.extname(file.originalname || "").toLowerCase();
+      if (!allowedCompletionExtensions.has(ext)) {
+        return cb(new Error("Unsupported file type. Allowed: PDF, DOC, DOCX, XLS, XLSX, JPG, JPEG, PNG"));
+      }
+      cb(null, true);
+    },
+  });
 
   const validShiftCodes = new Set(["A", "B", "C", "G"]);
   const normalizeShift = (value: unknown) => {
@@ -40,8 +183,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     delete result.machineCodeStored;
     delete result.machineCodeDerived;
     delete result.machineCodeFallback;
+    result.checksheetPath = schedule.checksheetPath ?? null;
+    result.completionRemark = schedule.completionRemark ?? null;
+    result.completionAttachmentPath = schedule.completionAttachmentPath ?? null;
+    result.previousScheduledDate = schedule.previousScheduledDate ?? null;
+    result.machineType = schedule.machineType ?? null;
+    result.rescheduleHistory = Array.isArray(schedule.rescheduleHistory) ? schedule.rescheduleHistory : [];
     return result;
   };
+
+  const toClientSchedule = (schedule: any, history: RescheduleHistoryEntry[] = []) =>
+    formatMaintenanceSchedule({
+      ...schedule,
+      rescheduleHistory: history,
+    });
 
   // Auth routes
   app.post("/api/auth/login", passport.authenticate("local"), (req, res) => {
@@ -365,18 +520,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
           notes: maintenanceSchedules.notes,
           emailRecipients: maintenanceSchedules.emailRecipients,
           emailTemplate: maintenanceSchedules.emailTemplate,
+          checksheetPath: maintenanceSchedules.checksheetPath,
+          completionRemark: maintenanceSchedules.completionRemark,
+          completionAttachmentPath: maintenanceSchedules.completionAttachmentPath,
+          previousScheduledDate: maintenanceSchedules.previousScheduledDate,
           preNotificationSent: maintenanceSchedules.preNotificationSent,
           createdAt: maintenanceSchedules.createdAt,
           updatedAt: maintenanceSchedules.updatedAt,
           completedAt: maintenanceSchedules.completedAt,
           machineName: machines.name,
           lineName: lines.name,
+          machineType: machines.type,
         })
         .from(maintenanceSchedules)
         .leftJoin(machines, eq(maintenanceSchedules.machineId, machines.id))
         .leftJoin(lines, eq(machines.lineId, lines.id));
 
-      res.json(schedules.map(formatMaintenanceSchedule));
+      const scheduleIds = schedules
+        .map((schedule) => (typeof schedule.id === "string" ? schedule.id : null))
+        .filter((id): id is string => Boolean(id));
+      const historyMap = await fetchRescheduleHistoryMap(scheduleIds);
+
+      res.json(
+        schedules.map((schedule) =>
+          toClientSchedule(schedule, schedule.id ? historyMap.get(schedule.id) ?? [] : []),
+        ),
+      );
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch maintenance plans" });
     }
@@ -438,12 +607,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           notes: maintenanceSchedules.notes,
           emailRecipients: maintenanceSchedules.emailRecipients,
           emailTemplate: maintenanceSchedules.emailTemplate,
+          checksheetPath: maintenanceSchedules.checksheetPath,
+          completionRemark: maintenanceSchedules.completionRemark,
+          completionAttachmentPath: maintenanceSchedules.completionAttachmentPath,
+          previousScheduledDate: maintenanceSchedules.previousScheduledDate,
           preNotificationSent: maintenanceSchedules.preNotificationSent,
           createdAt: maintenanceSchedules.createdAt,
           updatedAt: maintenanceSchedules.updatedAt,
           completedAt: maintenanceSchedules.completedAt,
           machineName: machines.name,
           lineName: lines.name,
+          machineType: machines.type,
         })
         .from(maintenanceSchedules)
         .leftJoin(machines, eq(maintenanceSchedules.machineId, machines.id))
@@ -451,7 +625,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(maintenanceSchedules.id, created.id))
         .limit(1);
 
-      res.json(formatMaintenanceSchedule(schedule));
+      if (!schedule) {
+        return res.status(500).json({ error: "Failed to load maintenance schedule after creation" });
+      }
+
+      const historyEntries = schedule.id ? await fetchRescheduleHistoryForId(schedule.id) : [];
+      res.json(toClientSchedule(schedule, historyEntries));
     } catch (error) {
       console.error("Failed to create maintenance plan:", error);
       const message =
@@ -463,17 +642,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/maintenance-plans/:id", isAuthenticated, hasRole("Admin", "Supervisor"), async (req, res) => {
     try {
       const { id } = req.params;
-      const { scheduledDate, maintenanceFrequency, notes, status, emailRecipients, emailTemplate, machineCode: updatedMachineCode, shift: updatedShift } = req.body ?? {}; 
+      const {
+        scheduledDate,
+        maintenanceFrequency,
+        notes,
+        status,
+        emailRecipients,
+        emailTemplate,
+        machineCode: updatedMachineCode,
+        shift: updatedShift,
+      } = req.body ?? {};
+
+      const [existingSchedule] = await db
+        .select({
+          scheduledDate: maintenanceSchedules.scheduledDate,
+          previousScheduledDate: maintenanceSchedules.previousScheduledDate,
+        })
+        .from(maintenanceSchedules)
+        .where(eq(maintenanceSchedules.id, id))
+        .limit(1);
+
+      if (!existingSchedule) {
+        return res.status(404).json({ error: "Maintenance plan not found" });
+      }
 
       const updates: Record<string, any> = { updatedAt: new Date() };
+      let scheduledDateChanged = false;
+      let formattedScheduledDate: string | null = null;
+      const trimmedNotes = typeof notes === "string" ? notes.trim() : "";
+      let historyPayload:
+        | {
+            scheduleId: string;
+            previousScheduledDate: string;
+            newScheduledDate: string;
+            reason: string | null;
+            changedById: string | null;
+          }
+        | null = null;
 
       if (scheduledDate) {
         const parsedDate = new Date(scheduledDate);
         if (Number.isNaN(parsedDate.getTime())) {
           return res.status(400).json({ error: "Invalid scheduled date" });
         }
-        updates.scheduledDate = parsedDate.toISOString().split("T")[0];
+        formattedScheduledDate = parsedDate.toISOString().split("T")[0];
+        updates.scheduledDate = formattedScheduledDate;
         updates.preNotificationSent = false;
+
+        if (existingSchedule.scheduledDate !== formattedScheduledDate) {
+          scheduledDateChanged = true;
+          updates.previousScheduledDate = existingSchedule.scheduledDate;
+          if (existingSchedule.scheduledDate) {
+            historyPayload = {
+              scheduleId: id,
+              previousScheduledDate: existingSchedule.scheduledDate,
+              newScheduledDate: formattedScheduledDate,
+              reason: trimmedNotes || null,
+              changedById: typeof (req.user as any)?.id === "string" ? (req.user as any).id : null,
+            };
+          }
+        }
       }
 
       if (maintenanceFrequency !== undefined) {
@@ -481,8 +709,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updates.maintenanceFrequency = trimmed || null;
       }
 
+      if (scheduledDateChanged && trimmedNotes.length === 0) {
+        return res.status(400).json({ error: "Provide a note explaining the date change" });
+      }
+
       if (notes !== undefined) {
-        const trimmedNotes = String(notes || "").trim();
         updates.notes = trimmedNotes || null;
       }
 
@@ -516,11 +747,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const [updated] = await db
-        .update(maintenanceSchedules)
-        .set(updates)
-        .where(eq(maintenanceSchedules.id, id))
-        .returning({ id: maintenanceSchedules.id });
+      const updated = await db.transaction(async (tx) => {
+        const [updatedRow] = await tx
+          .update(maintenanceSchedules)
+          .set(updates)
+          .where(eq(maintenanceSchedules.id, id))
+          .returning({ id: maintenanceSchedules.id });
+
+        if (!updatedRow) {
+          return null;
+        }
+
+        if (scheduledDateChanged && historyPayload) {
+          await tx.insert(maintenanceScheduleHistory).values(historyPayload);
+        }
+
+        return updatedRow;
+      });
 
       if (!updated) {
         return res.status(404).json({ error: "Maintenance plan not found" });
@@ -539,12 +782,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           notes: maintenanceSchedules.notes,
           emailRecipients: maintenanceSchedules.emailRecipients,
           emailTemplate: maintenanceSchedules.emailTemplate,
+          checksheetPath: maintenanceSchedules.checksheetPath,
+          completionRemark: maintenanceSchedules.completionRemark,
+          completionAttachmentPath: maintenanceSchedules.completionAttachmentPath,
+          previousScheduledDate: maintenanceSchedules.previousScheduledDate,
           preNotificationSent: maintenanceSchedules.preNotificationSent,
           createdAt: maintenanceSchedules.createdAt,
           updatedAt: maintenanceSchedules.updatedAt,
           completedAt: maintenanceSchedules.completedAt,
           machineName: machines.name,
           lineName: lines.name,
+          machineType: machines.type,
         })
         .from(maintenanceSchedules)
         .leftJoin(machines, eq(maintenanceSchedules.machineId, machines.id))
@@ -552,7 +800,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(maintenanceSchedules.id, updated.id))
         .limit(1);
 
-      res.json(formatMaintenanceSchedule(schedule));
+      if (!schedule) {
+        return res.status(500).json({ error: "Failed to load maintenance schedule after creation" });
+      }
+
+      const historyEntries = schedule.id ? await fetchRescheduleHistoryForId(schedule.id) : [];
+      res.json(toClientSchedule(schedule, historyEntries));
     } catch (error) {
       console.error("Failed to update maintenance plan:", error);
       const message =
@@ -561,60 +814,468 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/maintenance-plans/:id/complete", isAuthenticated, hasRole("Admin", "Supervisor"), async (req, res) => {
-    try {
+  app.post(
+    "/api/maintenance-plans/:id/complete",
+    isAuthenticated,
+    hasRole("Admin", "Supervisor"),
+    (req, res, next) => {
+      completionUpload.single("attachment")(req as any, res as any, (err: unknown) => {
+        if (err) {
+          const message = err instanceof Error ? err.message : "Failed to upload completion attachment";
+          return res.status(400).json({ error: message });
+        }
+        next();
+      });
+    },
+    async (req, res) => {
       const { id } = req.params;
-
-      const [updated] = await db
-        .update(maintenanceSchedules)
-        .set({
-          status: "completed",
-          completedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(maintenanceSchedules.id, id))
-        .returning({ id: maintenanceSchedules.id });
-
-      if (!updated) {
-        return res.status(404).json({ error: "Maintenance plan not found" });
+      const remarkRaw = typeof req.body?.remark === "string" ? req.body.remark.trim() : "";
+      if (remarkRaw.length === 0) {
+        return res.status(400).json({ error: "Completion remark is required" });
       }
 
-      await sendMaintenanceCompletionNotification(updated.id);
+      const file = (req as any).file as { originalname?: string; buffer: Buffer } | undefined;
+      if (!file) {
+        return res.status(400).json({ error: "Completion attachment is required" });
+      }
+      let newAttachmentAbsolutePath: string | null = null;
 
+      try {
+        const [existing] = await db
+          .select({
+            id: maintenanceSchedules.id,
+            machineId: maintenanceSchedules.machineId,
+            completionAttachmentPath: maintenanceSchedules.completionAttachmentPath,
+            previousScheduledDate: maintenanceSchedules.previousScheduledDate,
+            machineCode: machines.code,
+            machineName: machines.name,
+          })
+          .from(maintenanceSchedules)
+          .leftJoin(machines, eq(maintenanceSchedules.machineId, machines.id))
+          .where(eq(maintenanceSchedules.id, id))
+          .limit(1);
+
+        if (!existing) {
+          return res.status(404).json({ error: "Maintenance plan not found" });
+        }
+
+        let attachmentPath = existing.completionAttachmentPath ?? null;
+
+        await fs.mkdir(COMPLETION_DIR, { recursive: true });
+        const sourceLabel = (existing.machineCode || existing.machineName || "completion") as string;
+        const sanitizedLabel = sourceLabel
+          .normalize("NFKD")
+          .replace(/[^A-Za-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .toLowerCase();
+        const shortName = sanitizedLabel.length > 0 ? sanitizedLabel.slice(0, 24) : "completion";
+        const extension = path.extname(file.originalname || "").toLowerCase();
+        const randomSuffix = randomBytes(4).toString("hex");
+        const fileName = `${shortName}-${randomSuffix}${extension}`;
+
+        const relativePath = path.posix.join("uploads", "completion-docs", fileName);
+        const absolutePath = path.join(COMPLETION_DIR, fileName);
+        newAttachmentAbsolutePath = absolutePath;
+
+        await fs.writeFile(absolutePath, file.buffer);
+        attachmentPath = relativePath;
+
+        if (existing.completionAttachmentPath) {
+          const existingAbsolute = path.join(process.cwd(), existing.completionAttachmentPath);
+          const normalizedDir = path.normalize(COMPLETION_DIR + path.sep);
+          const normalizedExisting = path.normalize(existingAbsolute);
+          if (normalizedExisting.startsWith(normalizedDir)) {
+            try {
+              await fs.unlink(existingAbsolute);
+            } catch {
+              // ignore cleanup errors for old attachments
+            }
+          }
+        }
+
+        const [updated] = await db
+          .update(maintenanceSchedules)
+          .set({
+            status: "completed",
+            completedAt: new Date(),
+            updatedAt: new Date(),
+            completionRemark: remarkRaw,
+            completionAttachmentPath: attachmentPath,
+          })
+          .where(eq(maintenanceSchedules.id, id))
+          .returning({ id: maintenanceSchedules.id });
+
+        if (!updated) {
+          return res.status(404).json({ error: "Maintenance plan not found" });
+        }
+
+        await sendMaintenanceCompletionNotification(updated.id);
+
+        const [schedule] = await db
+          .select({
+            id: maintenanceSchedules.id,
+            machineId: maintenanceSchedules.machineId,
+            machineCodeStored: maintenanceSchedules.machineCode,
+            machineCodeDerived: machines.code,
+            scheduledDate: maintenanceSchedules.scheduledDate,
+            shift: maintenanceSchedules.shift,
+            status: maintenanceSchedules.status,
+            maintenanceFrequency: maintenanceSchedules.maintenanceFrequency,
+            notes: maintenanceSchedules.notes,
+            emailRecipients: maintenanceSchedules.emailRecipients,
+            emailTemplate: maintenanceSchedules.emailTemplate,
+            checksheetPath: maintenanceSchedules.checksheetPath,
+            completionRemark: maintenanceSchedules.completionRemark,
+            completionAttachmentPath: maintenanceSchedules.completionAttachmentPath,
+            preNotificationSent: maintenanceSchedules.preNotificationSent,
+            createdAt: maintenanceSchedules.createdAt,
+            updatedAt: maintenanceSchedules.updatedAt,
+            completedAt: maintenanceSchedules.completedAt,
+            machineName: machines.name,
+            lineName: lines.name,
+            machineType: machines.type,
+          })
+          .from(maintenanceSchedules)
+          .leftJoin(machines, eq(maintenanceSchedules.machineId, machines.id))
+          .leftJoin(lines, eq(machines.lineId, lines.id))
+          .where(eq(maintenanceSchedules.id, updated.id))
+          .limit(1);
+
+        if (!schedule) {
+          return res.status(500).json({ error: "Failed to load maintenance plan after update" });
+        }
+
+        const historyEntries = schedule.id ? await fetchRescheduleHistoryForId(schedule.id) : [];
+        res.json(toClientSchedule(schedule, historyEntries));
+      } catch (error) {
+        if (newAttachmentAbsolutePath) {
+          try {
+            await fs.unlink(newAttachmentAbsolutePath);
+          } catch {
+            // ignore cleanup errors for newly uploaded file
+          }
+        }
+        console.error("Failed to complete maintenance plan:", error);
+        const message =
+          error instanceof Error && error.message ? error.message : "Failed to complete maintenance plan";
+        res.status(500).json({ error: message });
+      }
+    },
+  );
+
+  app.post(
+    "/api/maintenance-plans/:id/checksheet",
+    isAuthenticated,
+    hasRole("Admin", "Supervisor"),
+    (req, res, next) => {
+      checksheetUpload.single("checksheet")(req as any, res as any, (err: unknown) => {
+        if (err) {
+          const message = err instanceof Error ? err.message : "Failed to upload checksheet";
+          return res.status(400).json({ error: message });
+        }
+        next();
+      });
+    },
+    async (req, res) => {
+      const { id } = req.params;
+      const file = (req as any).file as { originalname?: string; buffer: Buffer } | undefined;
+
+      console.log("POST /api/maintenance-plans/:id/checksheet", {
+        scheduleId: id,
+        hasFile: Boolean(file),
+        userId: (req.user as { id?: string } | undefined)?.id ?? null,
+      });
+
+      if (!file) {
+        return res.status(400).json({ error: "Checksheet file is required" });
+      }
+
+      let newFileAbsolutePath: string | null = null;
+
+      try {
+        const [schedule] = await db
+          .select({
+            id: maintenanceSchedules.id,
+            machineId: maintenanceSchedules.machineId,
+            existingPath: maintenanceSchedules.checksheetPath,
+            machineCode: machines.code,
+            machineName: machines.name,
+          })
+          .from(maintenanceSchedules)
+          .leftJoin(machines, eq(maintenanceSchedules.machineId, machines.id))
+          .where(eq(maintenanceSchedules.id, id))
+          .limit(1);
+
+        if (!schedule) {
+          return res.status(404).json({ error: "Maintenance plan not found" });
+        }
+
+        await fs.mkdir(CHECKSHEET_DIR, { recursive: true });
+
+        const sourceLabel = (schedule.machineCode || schedule.machineName || "machine") as string;
+        const sanitizedLabel = sourceLabel
+          .normalize("NFKD")
+          .replace(/[^A-Za-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .toLowerCase();
+        const shortName = sanitizedLabel.length > 0 ? sanitizedLabel.slice(0, 20) : "machine";
+
+        const extension = path.extname(file.originalname || "").toLowerCase();
+        const randomSuffix = randomBytes(4).toString("hex");
+        const fileName = `${shortName}-${randomSuffix}${extension}`;
+
+        const relativePath = path.posix.join("uploads", "checksheets", fileName);
+        const absolutePath = path.join(CHECKSHEET_DIR, fileName);
+        newFileAbsolutePath = absolutePath;
+
+        await fs.writeFile(absolutePath, file.buffer);
+
+        await db
+          .update(maintenanceSchedules)
+          .set({
+            checksheetPath: relativePath,
+            updatedAt: new Date(),
+          })
+          .where(eq(maintenanceSchedules.id, id));
+
+        if (schedule.existingPath) {
+          const existingAbsolute = path.join(process.cwd(), schedule.existingPath);
+          const normalizedDir = path.normalize(CHECKSHEET_DIR + path.sep);
+          const normalizedExisting = path.normalize(existingAbsolute);
+          if (normalizedExisting.startsWith(normalizedDir)) {
+            try {
+              await fs.unlink(existingAbsolute);
+            } catch {
+              // Ignore errors when removing old files
+            }
+          }
+        }
+
+        const [updatedSchedule] = await db
+          .select({
+            id: maintenanceSchedules.id,
+            machineId: maintenanceSchedules.machineId,
+            machineCodeStored: maintenanceSchedules.machineCode,
+            machineCodeDerived: machines.code,
+            scheduledDate: maintenanceSchedules.scheduledDate,
+            shift: maintenanceSchedules.shift,
+            status: maintenanceSchedules.status,
+            maintenanceFrequency: maintenanceSchedules.maintenanceFrequency,
+            notes: maintenanceSchedules.notes,
+            emailRecipients: maintenanceSchedules.emailRecipients,
+            emailTemplate: maintenanceSchedules.emailTemplate,
+            checksheetPath: maintenanceSchedules.checksheetPath,
+            preNotificationSent: maintenanceSchedules.preNotificationSent,
+            createdAt: maintenanceSchedules.createdAt,
+            updatedAt: maintenanceSchedules.updatedAt,
+            completedAt: maintenanceSchedules.completedAt,
+            machineName: machines.name,
+            lineName: lines.name,
+            machineType: machines.type,
+            previousScheduledDate: maintenanceSchedules.previousScheduledDate,
+        })
+          .from(maintenanceSchedules)
+          .leftJoin(machines, eq(maintenanceSchedules.machineId, machines.id))
+          .leftJoin(lines, eq(machines.lineId, lines.id))
+          .where(eq(maintenanceSchedules.id, id))
+          .limit(1);
+
+        if (!updatedSchedule) {
+          return res
+            .status(500)
+            .json({ error: "Failed to load updated maintenance plan after saving checksheet" });
+        }
+
+        const historyEntries = updatedSchedule.id ? await fetchRescheduleHistoryForId(updatedSchedule.id) : [];
+        res.json(toClientSchedule(updatedSchedule, historyEntries));
+      } catch (error) {
+        if (newFileAbsolutePath) {
+          try {
+            await fs.unlink(newFileAbsolutePath);
+          } catch {
+            // ignore cleanup errors
+          }
+        }
+        console.error("Failed to upload checksheet:", error);
+        const message = error instanceof Error && error.message ? error.message : "Failed to upload checksheet";
+        res.status(500).json({ error: message });
+      }
+    },
+  );
+
+  app.get("/api/maintenance-plans/:id/checksheet", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
       const [schedule] = await db
         .select({
-          id: maintenanceSchedules.id,
-          machineId: maintenanceSchedules.machineId,
-          machineCodeStored: maintenanceSchedules.machineCode,
-          machineCodeDerived: machines.code,
-          scheduledDate: maintenanceSchedules.scheduledDate,
-          shift: maintenanceSchedules.shift,
-          status: maintenanceSchedules.status,
-          maintenanceFrequency: maintenanceSchedules.maintenanceFrequency,
-          notes: maintenanceSchedules.notes,
-          emailRecipients: maintenanceSchedules.emailRecipients,
-          emailTemplate: maintenanceSchedules.emailTemplate,
-          preNotificationSent: maintenanceSchedules.preNotificationSent,
-          createdAt: maintenanceSchedules.createdAt,
-          updatedAt: maintenanceSchedules.updatedAt,
-          completedAt: maintenanceSchedules.completedAt,
+          checksheetPath: maintenanceSchedules.checksheetPath,
+          machineCode: machines.code,
           machineName: machines.name,
-          lineName: lines.name,
         })
         .from(maintenanceSchedules)
         .leftJoin(machines, eq(maintenanceSchedules.machineId, machines.id))
-        .leftJoin(lines, eq(machines.lineId, lines.id))
-        .where(eq(maintenanceSchedules.id, updated.id))
+        .where(eq(maintenanceSchedules.id, id))
         .limit(1);
 
-      res.json(formatMaintenanceSchedule(schedule));
+      if (!schedule) {
+        return res.status(404).json({ error: "Maintenance plan not found" });
+      }
+
+      if (!schedule.checksheetPath) {
+        return res.status(404).json({ error: "Checksheet not available" });
+      }
+
+      const absolutePath = path.join(process.cwd(), schedule.checksheetPath);
+      const normalizedDir = path.normalize(CHECKSHEET_DIR + path.sep);
+      const normalizedAbsolute = path.normalize(absolutePath);
+
+      if (!normalizedAbsolute.startsWith(normalizedDir)) {
+        return res.status(400).json({ error: "Invalid checksheet path" });
+      }
+
+      try {
+        await fs.access(absolutePath);
+      } catch {
+        return res.status(404).json({ error: "Checksheet not available" });
+      }
+
+      const downloadLabel = (schedule.machineCode || schedule.machineName || "checksheet").toString();
+      const safeLabel = downloadLabel
+        .normalize("NFKD")
+        .replace(/[^A-Za-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .toLowerCase() || "checksheet";
+      const downloadName = `${safeLabel}${path.extname(absolutePath).toLowerCase()}`;
+
+      res.download(absolutePath, downloadName, (err) => {
+        if (err) {
+          console.error("Failed to send checksheet:", err);
+          if (!res.headersSent) {
+            res.status(500).json({ error: "Failed to download checksheet" });
+          }
+        }
+      });
     } catch (error) {
-      console.error("Failed to complete maintenance plan:", error);
-      const message =
-        error instanceof Error && error.message ? error.message : "Failed to complete maintenance plan";
+      console.error("Failed to download checksheet:", error);
+      const message = error instanceof Error && error.message ? error.message : "Failed to download checksheet";
       res.status(500).json({ error: message });
     }
   });
+
+  app.get("/api/maintenance-plans/:id/completion-attachment", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const [schedule] = await db
+        .select({
+          completionAttachmentPath: maintenanceSchedules.completionAttachmentPath,
+          machineCode: machines.code,
+          machineName: machines.name,
+        })
+        .from(maintenanceSchedules)
+        .leftJoin(machines, eq(maintenanceSchedules.machineId, machines.id))
+        .where(eq(maintenanceSchedules.id, id))
+        .limit(1);
+
+      if (!schedule) {
+        return res.status(404).json({ error: "Maintenance plan not found" });
+      }
+
+      if (!schedule.completionAttachmentPath) {
+        return res.status(404).json({ error: "Completion attachment not available" });
+      }
+
+      const absolutePath = path.join(process.cwd(), schedule.completionAttachmentPath);
+      const normalizedDir = path.normalize(COMPLETION_DIR + path.sep);
+      const normalizedAbsolute = path.normalize(absolutePath);
+
+      if (!normalizedAbsolute.startsWith(normalizedDir)) {
+        return res.status(400).json({ error: "Invalid completion attachment path" });
+      }
+
+      try {
+        await fs.access(absolutePath);
+      } catch {
+        return res.status(404).json({ error: "Completion attachment not available" });
+      }
+
+      const downloadLabel = (schedule.machineCode || schedule.machineName || "completion").toString();
+      const safeLabel = downloadLabel
+        .normalize("NFKD")
+        .replace(/[^A-Za-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .toLowerCase() || "completion";
+      const downloadName = `${safeLabel}${path.extname(absolutePath).toLowerCase()}`;
+
+      res.download(absolutePath, downloadName, (err) => {
+        if (err) {
+          console.error("Failed to send completion attachment:", err);
+          if (!res.headersSent) {
+            res.status(500).json({ error: "Failed to download completion attachment" });
+          }
+        }
+      });
+    } catch (error) {
+      console.error("Failed to download completion attachment:", error);
+      const message =
+        error instanceof Error && error.message ? error.message : "Failed to download completion attachment";
+      res.status(500).json({ error: message });
+    }
+  });
+
+  app.delete(
+    "/api/maintenance-plans/:id/checksheet",
+    isAuthenticated,
+    hasRole("Admin", "Supervisor"),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const [schedule] = await db
+          .select({
+            checksheetPath: maintenanceSchedules.checksheetPath,
+          })
+          .from(maintenanceSchedules)
+          .where(eq(maintenanceSchedules.id, id))
+          .limit(1);
+
+        if (!schedule) {
+          return res.status(404).json({ error: "Maintenance plan not found" });
+        }
+
+        if (!schedule.checksheetPath) {
+          return res.status(404).json({ error: "Checksheet not available" });
+        }
+
+        const absolutePath = path.join(process.cwd(), schedule.checksheetPath);
+        const normalizedDir = path.normalize(CHECKSHEET_DIR + path.sep);
+        const normalizedAbsolute = path.normalize(absolutePath);
+
+        if (!normalizedAbsolute.startsWith(normalizedDir)) {
+          return res.status(400).json({ error: "Invalid checksheet path" });
+        }
+
+        try {
+          await fs.unlink(absolutePath);
+        } catch (error) {
+          console.error("Failed to remove checksheet file:", error);
+          return res.status(500).json({ error: "Failed to remove checksheet file" });
+        }
+
+        await db
+          .update(maintenanceSchedules)
+          .set({
+            checksheetPath: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(maintenanceSchedules.id, id));
+
+        res.json({ message: "Checksheet removed" });
+      } catch (error) {
+        console.error("Failed to remove checksheet:", error);
+        const message = error instanceof Error && error.message ? error.message : "Failed to remove checksheet";
+        res.status(500).json({ error: message });
+      }
+    },
+  );
 
   // Employees
   app.post("/api/employees", isAuthenticated, hasRole("Admin"), async (req, res) => {

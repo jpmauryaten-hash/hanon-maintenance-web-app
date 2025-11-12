@@ -29,6 +29,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import RoleBadge from "./RoleBadge";
 import { useLocation } from "wouter";
 import { useEffect, useMemo, useState } from "react";
+import { resolveApiUrl } from "@/lib/queryClient";
 
 const menuItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -231,7 +232,7 @@ export default function AppSidebar({ role = "admin", userName = "Admin User" }: 
           <a href="#" onClick={async (e) => { 
             e.preventDefault(); 
             try {
-              await fetch('/api/auth/logout', { method: 'POST' });
+              await fetch(resolveApiUrl('/api/auth/logout'), { method: 'POST', credentials: 'include' });
               window.location.href = '/login';
             } catch (error) {
               console.error('Logout failed:', error);

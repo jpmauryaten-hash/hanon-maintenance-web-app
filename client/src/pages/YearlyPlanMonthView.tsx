@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
@@ -8,15 +8,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLocation, useRoute } from "wouter";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, resolveApiUrl } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Calendar } from "lucide-react";
+import { Calendar, Download, Info } from "lucide-react";
+import { format } from "date-fns";
 
 const MAINTENANCE_FREQUENCIES = ["Monthly", "Quarterly", "Half Yearly", "Yearly"];
 const ALL_FREQUENCY_OPTION = "all";
 const ALL_PLAN_YEAR_OPTION = "all-plan-year";
+const ALL_MAINTENANCE_TYPE_OPTION = "all-maintenance-type";
 const YEARLY_PLAN_MONTHS = [
   { key: "jan", label: "JAN" },
   { key: "feb", label: "FEB" },
@@ -32,6 +35,9 @@ const YEARLY_PLAN_MONTHS = [
   { key: "dec", label: "DEC" },
 ] as const;
 const SHIFT_OPTIONS = ["A", "B", "C", "G"] as const;
+const MAINTENANCE_TYPE_OPTIONS = ["Preventive", "Predictive", "Overhauling"] as const;
+type MaintenanceTypeOption = (typeof MAINTENANCE_TYPE_OPTIONS)[number];
+const DEFAULT_MAINTENANCE_TYPE: MaintenanceTypeOption = MAINTENANCE_TYPE_OPTIONS[0];
 const MONTH_LABEL_MAP = new Map<YearlyPlanMonthKey, string>(
   YEARLY_PLAN_MONTHS.map(({ key, label }) => [key, label]),
 );
@@ -43,6 +49,24 @@ const sanitizeShift = (value: string | null | undefined): string => {
   const upper = value.trim().toUpperCase();
   return SHIFT_OPTIONS.includes(upper as (typeof SHIFT_OPTIONS)[number]) ? upper : "";
 };
+
+const parseMaintenanceType = (value: string | null | undefined): MaintenanceTypeOption | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const match = MAINTENANCE_TYPE_OPTIONS.find(
+    (option) => option.toLowerCase() === trimmed.toLowerCase(),
+  );
+  return match ?? null;
+};
+
+const resolveMaintenanceTypeSelection = (
+  value: string | null | undefined,
+): MaintenanceTypeOption => parseMaintenanceType(value) ?? DEFAULT_MAINTENANCE_TYPE;
 
 type YearlyPlanMonthKey = (typeof YEARLY_PLAN_MONTHS)[number]["key"];
 type YearlyPlanMonthRecord = Record<YearlyPlanMonthKey, string | null>;
@@ -62,8 +86,98 @@ interface MaintenanceScheduleRecord {
   scheduledDate: string;
   status?: string | null;
   shift?: string | null;
+  maintenanceType?: MaintenanceTypeOption | null;
   notes?: string | null;
+  checksheetPath?: string | null;
+  completionRemark?: string | null;
+  completionAttachmentPath?: string | null;
+  previousScheduledDate?: string | null;
+  updatedAt?: string | null;
+  rescheduleHistory?: MaintenanceRescheduleHistoryEntry[];
 }
+
+interface MaintenanceRescheduleHistoryEntry {
+  previousScheduledDate?: string | null;
+  newScheduledDate?: string | null;
+  reason?: string | null;
+  changedAt?: string | null;
+  changedById?: string | null;
+}
+
+type RescheduledCellInfo = {
+  reason: string | null;
+  newDate: string | null;
+  changedAt: string | null;
+};
+
+const formatRescheduleTooltip = (entry: RescheduledCellInfo | null | undefined): string | null => {
+  if (!entry) {
+    return null;
+  }
+  const parts: string[] = [];
+  if (entry.reason) {
+    parts.push(entry.reason);
+  }
+  if (entry.newDate) {
+    parts.push(`Rescheduled to ${entry.newDate}`);
+  }
+  if (entry.changedAt) {
+    const parsed = new Date(entry.changedAt);
+    if (!Number.isNaN(parsed.getTime())) {
+      parts.push(`Changed on ${format(parsed, "yyyy-MM-dd HH:mm")}`);
+    }
+  }
+  return parts.length > 0 ? parts.join(" • ") : null;
+};
+
+const toSafeFileLabel = (label: string | null | undefined, fallback: string): string => {
+  const trimmed = (label ?? "").trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  const normalized = trimmed
+    .normalize("NFKD")
+    .replace(/[^A-Za-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+  return normalized.length > 0 ? normalized : fallback;
+};
+
+const downloadBlobAsFile = async (
+  response: Response,
+  fallbackName: string,
+  fallbackExtension?: string | null,
+) => {
+  const blob = await response.blob();
+  const disposition = response.headers.get("content-disposition") ?? "";
+  let filename: string | null = null;
+
+  const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";\r\n]+)/i);
+  if (match?.[1]) {
+    const raw = match[1].replace(/^["']|["']$/g, "");
+    try {
+      filename = decodeURIComponent(raw);
+    } catch {
+      filename = raw;
+    }
+  }
+
+  if (!filename) {
+    const extension =
+      fallbackExtension && fallbackExtension.startsWith(".") ? fallbackExtension : "";
+    filename = `${fallbackName}${extension}`;
+  }
+
+  const objectUrl = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  setTimeout(() => window.URL.revokeObjectURL(objectUrl), 0);
+};
 
 type PlanEditState = {
   machine: any;
@@ -73,6 +187,7 @@ type PlanEditState = {
   allowedMonths: Set<YearlyPlanMonthKey>;
   initialDay: number;
   initialShift: string;
+  initialMaintenanceType: MaintenanceTypeOption;
   planShift: string;
   plannedDay: number | null;
   fallbackDay: number | null;
@@ -194,6 +309,51 @@ const monthParam = (params?.month || "").toLowerCase() as YearlyPlanMonthKey;
 const monthConfig = YEARLY_PLAN_MONTHS.find((month) => month.key === monthParam);
 const { toast } = useToast();
 
+const handleDownloadCompletionAttachment = useCallback(
+  async (schedule: MaintenanceScheduleRecord, machineLabel?: string | null) => {
+    if (!schedule?.id) {
+      return;
+    }
+
+    const attachmentPath = (schedule.completionAttachmentPath || "").trim();
+    if (!attachmentPath) {
+      toast({
+        title: "No document available",
+        description: "This maintenance record does not have a completion document attached.",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        resolveApiUrl(`/api/maintenance-plans/${schedule.id}/completion-attachment`),
+        { credentials: "include" },
+      );
+
+      if (!response.ok) {
+        const errorText = (await response.text()) || response.statusText;
+        throw new Error(errorText);
+      }
+
+      const fallbackLabel = toSafeFileLabel(machineLabel, "completion");
+      const fallbackExtension =
+        attachmentPath.includes(".") ? attachmentPath.slice(attachmentPath.lastIndexOf(".")) : null;
+
+      await downloadBlobAsFile(response, fallbackLabel, fallbackExtension);
+    } catch (error) {
+      toast({
+        title: "Failed to download document",
+        description:
+          error instanceof Error && error.message
+            ? error.message
+            : "Unable to download the completion document.",
+        variant: "destructive",
+      });
+    }
+  },
+  [toast],
+);
+
 const [location] = useLocation();
 const queryIndex = location.indexOf("?");
 const search = queryIndex === -1 ? "" : location.slice(queryIndex);
@@ -291,12 +451,14 @@ const { data: maintenanceSchedules = [], isLoading: schedulesLoading } = useQuer
 
 const [editingCell, setEditingCell] = useState<PlanEditState | null>(null);
 const [formShift, setFormShift] = useState<string>(SHIFT_OPTIONS[0]);
+const [formMaintenanceType, setFormMaintenanceType] = useState<MaintenanceTypeOption>(DEFAULT_MAINTENANCE_TYPE);
 const [formDay, setFormDay] = useState<string>("");
 const [formReason, setFormReason] = useState<string>("");
 
 useEffect(() => {
   if (editingCell) {
     setFormShift(editingCell.initialShift);
+    setFormMaintenanceType(editingCell.initialMaintenanceType);
     setFormDay(String(editingCell.initialDay));
     setFormReason("");
   }
@@ -310,11 +472,12 @@ const scheduleMutation = useMutation<
     selectedDay: number;
     shift: string;
     reason: string;
+    maintenanceType: MaintenanceTypeOption;
     existingSchedule: MaintenanceScheduleRecord | null;
     planValues: Map<YearlyPlanMonthKey, string>;
   }
 >({
-  mutationFn: async ({ machine, selectedDay, shift, reason, existingSchedule }) => {
+  mutationFn: async ({ machine, selectedDay, shift, reason, existingSchedule, maintenanceType }) => {
     if (!monthConfig) {
       throw new Error("Month configuration is missing.");
     }
@@ -333,6 +496,7 @@ const scheduleMutation = useMutation<
       const payload: Record<string, any> = {
         scheduledDate: formattedDate,
         shift,
+        maintenanceType,
       };
 
       if (reason) {
@@ -348,6 +512,7 @@ const scheduleMutation = useMutation<
         machineId: machine.id,
         scheduledDate: formattedDate,
         shift,
+        maintenanceType,
       };
 
       if (reason) {
@@ -425,9 +590,102 @@ const scheduledDaysByMachine = useMemo(() => {
     const normalizedSchedule: MaintenanceScheduleRecord = {
       ...schedule,
       shift: sanitizeShift(schedule.shift),
+      maintenanceType: parseMaintenanceType(schedule.maintenanceType) ?? null,
     };
 
     map.get(schedule.machineId)!.set(day, normalizedSchedule);
+  }
+
+  return map;
+}, [effectiveYear, maintenanceSchedules, monthConfig]);
+
+const rescheduledDaysByMachine = useMemo(() => {
+  const map = new Map<string, Map<number, RescheduledCellInfo>>();
+
+  if (!monthConfig) {
+    return map;
+  }
+
+  const monthIndex = YEARLY_PLAN_MONTHS.findIndex((month) => month.key === monthConfig.key);
+  if (monthIndex < 0) {
+    return map;
+  }
+
+  const addEntry = (
+    machineId: string,
+    dateValue: string | null | undefined,
+    reason: string | null | undefined,
+    newDate: string | null | undefined,
+    changedAt: string | null | undefined,
+  ) => {
+    if (!machineId || !dateValue) {
+      return;
+    }
+    const [yearStr, monthStr, dayStr] = dateValue.split("-");
+    const year = Number.parseInt(yearStr ?? "", 10);
+    const month = Number.parseInt(monthStr ?? "", 10) - 1;
+    const day = Number.parseInt(dayStr ?? "", 10);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+      return;
+    }
+    if (year !== effectiveYear || month !== monthIndex || day < 1 || day > 31) {
+      return;
+    }
+
+    if (!map.has(machineId)) {
+      map.set(machineId, new Map<number, RescheduledCellInfo>());
+    }
+
+    const sanitizedReason =
+      typeof reason === "string" && reason.trim().length > 0 ? reason.trim() : null;
+    const sanitizedNewDate =
+      typeof newDate === "string" && newDate.trim().length > 0 ? newDate.trim() : null;
+    const normalizedChangedAt = (() => {
+      if (!changedAt) {
+        return null;
+      }
+      const parsed = new Date(changedAt);
+      if (Number.isNaN(parsed.getTime())) {
+        return null;
+      }
+      return parsed.toISOString();
+    })();
+
+    const entry: RescheduledCellInfo = {
+      reason: sanitizedReason,
+      newDate: sanitizedNewDate,
+      changedAt: normalizedChangedAt,
+    };
+
+    map.get(machineId)!.set(day, entry);
+  };
+
+  for (const schedule of maintenanceSchedules) {
+    if (!schedule?.machineId) {
+      continue;
+    }
+
+    if (Array.isArray(schedule.rescheduleHistory)) {
+      for (const entry of schedule.rescheduleHistory) {
+        addEntry(
+          schedule.machineId,
+          entry?.previousScheduledDate ?? null,
+          entry?.reason ?? null,
+          entry?.newScheduledDate ?? null,
+          entry?.changedAt ?? null,
+        );
+      }
+    }
+
+    if (schedule.previousScheduledDate) {
+      addEntry(
+        schedule.machineId,
+        schedule.previousScheduledDate,
+        schedule.notes ?? null,
+        schedule.scheduledDate ?? null,
+        schedule.updatedAt ?? null,
+      );
+    }
   }
 
   return map;
@@ -533,6 +791,7 @@ const [filters, setFilters] = useState({
   machineName: "",
   frequency: ALL_FREQUENCY_OPTION,
   planYear: ALL_PLAN_YEAR_OPTION,
+  maintenanceType: ALL_MAINTENANCE_TYPE_OPTION,
 });
 
 const frequencyOptions = useMemo(() => {
@@ -561,6 +820,7 @@ const filteredMachines = useMemo(() => {
   const nameFilter = filters.machineName.trim().toLowerCase();
   const frequencyFilter = filters.frequency;
   const planYearFilter = filters.planYear;
+  const maintenanceTypeFilter = filters.maintenanceType;
 
   return scheduledMachines.filter((machine) => {
     if (nameFilter && !(machine.name || "").toLowerCase().includes(nameFilter)) {
@@ -579,9 +839,17 @@ const filteredMachines = useMemo(() => {
       }
     }
 
+    if (maintenanceTypeFilter !== ALL_MAINTENANCE_TYPE_OPTION) {
+      const latestSchedule = latestScheduleByMachine.get(machine.id) ?? null;
+      const machineMaintenanceType = parseMaintenanceType(latestSchedule?.maintenanceType);
+      if (machineMaintenanceType !== maintenanceTypeFilter) {
+        return false;
+      }
+    }
+
     return true;
   });
-}, [filters, scheduledMachines]);
+}, [filters, latestScheduleByMachine, scheduledMachines]);
 
 const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.key === monthConfig.key) : -1;
   const monthDays =
@@ -626,6 +894,7 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
     fallbackDayValue: number | null,
     allowedMonths: Set<YearlyPlanMonthKey>,
     frequency: string,
+    selectedDayFromCell: number,
   ) => {
     if (!monthConfig) {
       return;
@@ -647,7 +916,12 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
         ? Number.parseInt(existingSchedule.scheduledDate.split("-")[2] ?? "", 10)
         : null;
 
+    const clickedDayIsValid =
+      Number.isFinite(selectedDayFromCell) &&
+      selectedDayFromCell >= 1 &&
+      selectedDayFromCell <= (monthDays[monthDays.length - 1]?.day ?? 31);
     const defaultDay =
+      (clickedDayIsValid ? selectedDayFromCell : null) ??
       existingScheduleDay ??
       plannedDayValue ??
       fallbackDayValue ??
@@ -656,6 +930,7 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
     const initialShiftCandidate =
       sanitizeShift(existingSchedule?.shift) || sanitizeShift(planShiftValue) || SHIFT_OPTIONS[0];
     const initialShift = sanitizeShift(initialShiftCandidate) || SHIFT_OPTIONS[0];
+    const initialMaintenanceType = resolveMaintenanceTypeSelection(existingSchedule?.maintenanceType);
 
     setEditingCell({
       machine,
@@ -665,12 +940,14 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
       allowedMonths,
       initialDay: defaultDay,
       initialShift,
+      initialMaintenanceType,
       planShift: sanitizeShift(planShiftValue),
       plannedDay: plannedDayValue,
       fallbackDay: fallbackDayValue,
       frequency,
     });
     setFormShift(initialShift);
+    setFormMaintenanceType(initialMaintenanceType);
     setFormDay(String(defaultDay));
     setFormReason("");
   };
@@ -769,6 +1046,7 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
       selectedDay: selectedDayNumber,
       shift: normalizedShift,
       reason: formReason.trim(),
+      maintenanceType: formMaintenanceType,
       existingSchedule: editingCell.existingSchedule,
       planValues: editingCell.planValues,
     });
@@ -841,6 +1119,25 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="filter-maintenance-type">Maintenance Type</Label>
+            <Select
+              value={filters.maintenanceType}
+              onValueChange={(value) => setFilters((prev) => ({ ...prev, maintenanceType: value }))}
+            >
+              <SelectTrigger id="filter-maintenance-type" className="w-48">
+                <SelectValue placeholder="All maintenance types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_MAINTENANCE_TYPE_OPTION}>All maintenance types</SelectItem>
+                {MAINTENANCE_TYPE_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -851,6 +1148,7 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
                 <TableHead>Frequency</TableHead>
                 <TableHead>Machine Name</TableHead>
                 <TableHead>PM Plan Year</TableHead>
+                <TableHead>Maintenance Type</TableHead>
                 <TableHead>Plan / Actual</TableHead>
                 {monthDays.map((day) => (
                   <TableHead key={day.day} className="text-center">
@@ -865,7 +1163,7 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
             <TableBody>
               {filteredMachines.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={monthDays.length + 5} className="text-center text-muted-foreground">
+                  <TableCell colSpan={monthDays.length + 6} className="text-center text-muted-foreground">
                     No machines scheduled for this month.
                   </TableCell>
                 </TableRow>
@@ -899,6 +1197,8 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
                       ? Number.parseInt(latestSchedule.scheduledDate.split("-")[2] ?? "", 10)
                       : null;
                   const hasScheduledShift = Boolean(scheduledShift);
+                  const maintenanceTypeValue = parseMaintenanceType(latestSchedule?.maintenanceType);
+                  const maintenanceTypeLabel = maintenanceTypeValue ?? "-";
                   const isPastMonth =
                     effectiveYear < todayYear ||
                     (effectiveYear === todayYear && monthIndex < todayMonth);
@@ -915,16 +1215,56 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
                     <Fragment key={machine.id}>
                       <TableRow>
                         <TableCell rowSpan={2}>{index + 1}</TableCell>
-                        <TableCell rowSpan={2}>
                         <TableCell rowSpan={2}>{frequencyBadges[frequency] ?? (frequency || "-")}</TableCell>
-                        </TableCell>
                         <TableCell rowSpan={2}>{machine.name}</TableCell>
                         <TableCell rowSpan={2}>{resolvePmPlanYear(machine) || "-"}</TableCell>
+                        <TableCell rowSpan={2}>{maintenanceTypeLabel}</TableCell>
                         <TableCell className="font-medium">Plan</TableCell>
                         {monthDays.map((day) => {
                           const isScheduledCell = hasScheduledShift && scheduledDay === day.day;
-                          const planCellDisplay = isScheduledCell ? scheduledShift : "-";
-                          const showEmptyState = !isScheduledCell;
+                          const rescheduledEntry =
+                            rescheduledDaysByMachine.get(machine.id)?.get(day.day) ?? null;
+                          const isHistoricalPlanCell = Boolean(rescheduledEntry) && !isScheduledCell;
+                          const recordForDay = scheduledDayMap.get(day.day) ?? null;
+                          const recordShift = sanitizeShift(recordForDay?.shift);
+                          const completedStatus = (recordForDay?.status || "").toLowerCase();
+                          const completedShiftLabel = recordShift || scheduledShift || planShift || "";
+                          const isCompletedPlanCell =
+                            completedStatus === "completed" && completedShiftLabel.length > 0;
+
+                          let planCellDisplay: ReactNode = "-";
+                          if (isHistoricalPlanCell) {
+                            const tooltipText =
+                              formatRescheduleTooltip(rescheduledEntry) ??
+                              (rescheduledEntry?.newDate
+                                ? `Rescheduled to ${rescheduledEntry.newDate}`
+                                : "Previously scheduled date");
+                            const shiftLabel = scheduledShift || planShift || "-";
+                            const stackedContent = (
+                              <div className="flex w-full flex-col items-center gap-1">
+                                <span className="text-sm text-white font-semibold">{shiftLabel}</span>
+                              </div>
+                            );
+                            planCellDisplay =
+                              tooltipText && tooltipText.trim().length > 0 ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>{stackedContent}</TooltipTrigger>
+                                  <TooltipContent side="top" align="center" className="max-w-xs text-center text-xs">
+                                    {tooltipText}
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : (
+                                stackedContent
+                              );
+                          } else if (isScheduledCell) {
+                            planCellDisplay = scheduledShift || "-";
+                          } else if (isCompletedPlanCell) {
+                            planCellDisplay = (
+                              <span className="text-sm font-semibold">{completedShiftLabel}</span>
+                            );
+                          }
+
+                          const showEmptyState = !isScheduledCell && !isHistoricalPlanCell && !isCompletedPlanCell;
 
                           const handlePlanCellClick = () => {
                             if (!isMonthAllowed) {
@@ -955,6 +1295,7 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
                               fallbackDisplayDay,
                               allowedMonthsSnapshot,
                               frequency,
+                              day.day,
                             );
                           };
 
@@ -978,6 +1319,7 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
                                       ? "cursor-not-allowed opacity-50"
                                       : "hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
                                     : "cursor-not-allowed opacity-50",
+                                  isHistoricalPlanCell && "border-red-300 text-red-900",
                                   isProcessing && "cursor-wait opacity-50",
                                 )}
                               >
@@ -994,15 +1336,99 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
                       <TableRow className="bg-muted/40">
                         <TableCell className="font-medium">Actual</TableCell>
                         {monthDays.map((day) => {
+                          const recordForDay = scheduledDayMap.get(day.day) ?? null;
                           const shouldHighlightActual = hasScheduledShift && scheduledDay === day.day;
-                          const actualCellClass = shouldHighlightActual
-                            ? "text-center bg-yellow-200 font-semibold text-black"
-                            : "text-center";
-                          const actualCellValue = shouldHighlightActual ? "" : "-";
+                          const rescheduledEntry =
+                            rescheduledDaysByMachine.get(machine.id)?.get(day.day) ?? null;
+                          const recordShift = recordForDay?.shift ?? "";
+                          const scheduleStatus = (recordForDay?.status || "").toLowerCase();
+                          const isCompletedSchedule = scheduleStatus === "completed";
+                          const completionRemark =
+                            typeof recordForDay?.completionRemark === "string"
+                              ? recordForDay.completionRemark.trim()
+                              : "";
+                          const hasCompletionRemark = completionRemark.length > 0;
+                          const hasCompletionAttachment =
+                            typeof recordForDay?.completionAttachmentPath === "string" &&
+                            recordForDay.completionAttachmentPath.trim().length > 0;
+
+                          let actualCellClass = "text-center";
+                          let actualCellContent: ReactNode = "-";
+
+                          if (rescheduledEntry && !isCompletedSchedule && !shouldHighlightActual) {
+                            const tooltipText =
+                              formatRescheduleTooltip(rescheduledEntry) ??
+                              (rescheduledEntry.newDate
+                                ? `Rescheduled to ${rescheduledEntry.newDate}`
+                                : "Previously scheduled date");
+                            const inner = (
+                              <div
+                                className="flex h-full w-full items-center justify-center bg-red-200 px-2 py-1 text-sm font-semibold text-red-900"
+                              >
+                                <Info className="h-4 w-4 text-red-900" aria-hidden="true" />
+                              </div>
+                            );
+                            actualCellClass =
+                              "p-0 align-middle [&:has([role=checkbox])]:pr-0 text-center bg-red-200 font-semibold text-black";
+                            actualCellContent =
+                              tooltipText && tooltipText.trim().length > 0 ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>{inner}</TooltipTrigger>
+                                  <TooltipContent side="top" align="center" className="max-w-xs text-center text-xs">
+                                    {tooltipText}
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : (
+                                inner
+                              );
+                          } else if (isCompletedSchedule) {
+                            const shiftLabel = recordShift || scheduledShift || "";
+                            const primaryLabel = shiftLabel || (hasCompletionAttachment ? "" : "Completed");
+                            const downloadButton =
+                              hasCompletionAttachment && recordForDay ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void handleDownloadCompletionAttachment(recordForDay, machine.name);
+                                  }}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded bg-emerald-600 text-emerald-50 transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-emerald-200"
+                                  aria-label="Download completion document"
+                                >
+                                  <Download className="h-4 w-4" aria-hidden="true" />
+                                </button>
+                              ) : null;
+                            const innerContent = (
+                              <div className="flex h-full w-full items-center justify-center gap-2 py-1">
+                                {downloadButton}
+                              </div>
+                            );
+                            actualCellClass = "text-center bg-emerald-200 font-semibold text-emerald-900";
+                            actualCellContent =
+                              hasCompletionRemark ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>{innerContent}</TooltipTrigger>
+                                  <TooltipContent
+                                    side="top"
+                                    align="center"
+                                    className="max-w-xs text-center text-xs"
+                                  >
+                                    {completionRemark}
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : (
+                                innerContent
+                              );
+                          } else if (shouldHighlightActual) {
+                            const shiftLabel = recordShift || scheduledShift || "";
+                            actualCellClass = "text-center bg-yellow-200 font-semibold text-black";
+                            actualCellContent = shiftLabel || "";
+                          } else if (recordForDay) {
+                            actualCellContent = recordShift || scheduledShift || "";
+                          }
 
                           return (
                             <TableCell key={`actual-${machine.id}-${day.day}`} className={actualCellClass}>
-                              {actualCellValue}
+                              {actualCellContent}
                             </TableCell>
                           );
                         })}
@@ -1044,6 +1470,25 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
                     {SHIFT_OPTIONS.map((option) => (
                       <SelectItem key={option} value={option}>
                         Shift {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="dialog-maintenance-type">Maintenance Type</Label>
+                <Select
+                  value={formMaintenanceType}
+                  onValueChange={(value) => setFormMaintenanceType(resolveMaintenanceTypeSelection(value))}
+                >
+                  <SelectTrigger id="dialog-maintenance-type">
+                    <SelectValue placeholder="Select maintenance type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MAINTENANCE_TYPE_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
                       </SelectItem>
                     ))}
                   </SelectContent>

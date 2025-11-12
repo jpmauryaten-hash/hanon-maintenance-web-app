@@ -30,6 +30,7 @@ The maintenance for machine {{machineName}}{{machineCodeFormatted}} on line {{li
 Planned maintenance date: {{scheduledDate}}
 Maintenance frequency: {{maintenanceFrequency}}
 Notes: {{notes}}
+Completion remark: {{completionRemark}}
 
 Regards,
 Maintenance Tracker
@@ -67,6 +68,7 @@ async function fetchScheduleWithMachine(scheduleId: string) {
       machineCodeStored: maintenanceSchedules.machineCode,
       machineCodeDerived: machines.code,
       lineName: lines.name,
+      completionRemark: maintenanceSchedules.completionRemark,
     })
     .from(maintenanceSchedules)
     .leftJoin(machines, eq(maintenanceSchedules.machineId, machines.id))
@@ -162,6 +164,7 @@ export async function sendMaintenanceCompletionNotification(scheduleId: string) 
     maintenanceFrequency: schedule.maintenanceFrequency || "Not specified",
     notes: schedule.notes || "None",
     completedDate: formatDate(completedDate),
+    completionRemark: schedule.completionRemark || "Not provided",
   };
 
   await sendMaintenanceEmail({

@@ -60,11 +60,25 @@ export const maintenanceSchedules = pgTable("maintenance_schedules", {
   notes: text("notes"),
   emailRecipients: text("email_recipients"),
   emailTemplate: text("email_template"),
+  checksheetPath: text("checksheet_path"),
+  completionRemark: text("completion_remark"),
+  completionAttachmentPath: text("completion_attachment_path"),
+  previousScheduledDate: date("previous_scheduled_date"),
   preNotificationSent: boolean("pre_notification_sent").default(false),
   createdById: varchar("created_by_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   completedAt: timestamp("completed_at"),
+});
+
+export const maintenanceScheduleHistory = pgTable("maintenance_schedule_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  scheduleId: varchar("schedule_id").notNull().references(() => maintenanceSchedules.id),
+  previousScheduledDate: date("previous_scheduled_date"),
+  newScheduledDate: date("new_scheduled_date"),
+  reason: text("reason"),
+  changedById: varchar("changed_by_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const maintenanceYearlyPlans = pgTable(
@@ -161,6 +175,10 @@ export const insertMaintenanceScheduleSchema = createInsertSchema(maintenanceSch
   createdAt: true,
   updatedAt: true,
   completedAt: true,
+  checksheetPath: true,
+  completionRemark: true,
+  completionAttachmentPath: true,
+  previousScheduledDate: true,
   preNotificationSent: true,
   status: true,
 });
@@ -202,6 +220,8 @@ export type InsertMaintenanceSchedule = z.infer<typeof insertMaintenanceSchedule
 
 export type MaintenanceYearlyPlan = typeof maintenanceYearlyPlans.$inferSelect;
 export type InsertMaintenanceYearlyPlan = z.infer<typeof insertMaintenanceYearlyPlanSchema>;
+
+export type MaintenanceScheduleHistory = typeof maintenanceScheduleHistory.$inferSelect;
 
 export type ProblemType = typeof problemTypes.$inferSelect;
 export type InsertProblemType = z.infer<typeof insertProblemTypeSchema>;

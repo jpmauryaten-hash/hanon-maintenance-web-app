@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { resolveApiUrl } from "@/lib/queryClient";
 
 interface User {
   id: string;
@@ -28,7 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await fetch(resolveApiUrl("/api/auth/logout"), { method: "POST", credentials: "include" });
       setLocation("/login");
     } catch (error) {
       console.error("Logout failed:", error);
