@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,8 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 
-const SHIFTS = ["A", "B", "C"];
-const PRIORITIES = ["High", "Medium", "Low"];
+const SHIFTS = ["A", "B", "C", "G"];
+const PRIORITIES = ["Critical", "Non-Critical"];
 const STATUSES = ["open", "closed", "pending"];
 const MAJOR_CONTRIBUTIONS = [
   "Spare Not Available",
@@ -25,6 +25,8 @@ interface BreakdownFormProps {
   onSubmit?: (data: any) => void;
   onCancel?: () => void;
   initialData?: any;
+  canEditClosed?: boolean;
+  canUseBackDates?: boolean;
 }
 
 const CATEGORIES = [
@@ -46,6 +48,12 @@ interface RootCauseEntry {
   evidenceBefore: string;
   evidenceAfter: string;
 }
+
+interface CapaCategoryOption {
+  id: string;
+  name: string;
+}
+
 
 interface PreventiveActionEntry {
   description: string;
@@ -72,14 +80,34 @@ interface ProblemDescriptionEntry {
   preventiveAction: string;
 }
 
-export default function BreakdownForm({ onSubmit, onCancel, initialData }: BreakdownFormProps) {
+export default function BreakdownForm({
+  onSubmit,
+  onCancel,
+  initialData,
+  canEditClosed = false,
+  canUseBackDates = false,
+}: BreakdownFormProps) {
+  const normalizePriority = (value: string | null | undefined) => {
+    if (!value) return "";
+    if (value === "High") return "Critical";
+    if (value === "Medium" || value === "Low") return "Non-Critical";
+    return value;
+  };
+
+  const todayIso = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const minAllowedDateIso = useMemo(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 3);
+    return date.toISOString().split("T")[0];
+  }, []);
   const [formData, setFormData] = useState({
-    date: '',
+    date: todayIso,
     shift: '',
     lineId: '',
     subLineId: '',
     machineId: '',
     problemTypeId: '',
+    problemDescription: '',
     priority: '',
     actionTaken: '',
     rootCause: '',
@@ -90,6 +118,7 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
     majorContributionTime: '',
     attendById: '',
     closedById: '',
+    closedDate: todayIso,
     remark: '',
     status: 'open',
     // CAPA fields
@@ -120,6 +149,9 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
   const { data: machines = [] } = useQuery<any[]>({ queryKey: ["/api/machines"] });
   const { data: problemTypes = [] } = useQuery<any[]>({ queryKey: ["/api/problem-types"] });
   const { data: employees = [] } = useQuery<any[]>({ queryKey: ["/api/employees"] });
+  const { data: capaCategoryMaster = [] } = useQuery<CapaCategoryOption[]>({ queryKey: ["/api/capa-categories"] });
+  const isEditingClosedEntry = initialData?.status === "closed";
+  const minDate = canUseBackDates ? undefined : minAllowedDateIso;
 
   useEffect(() => {
     if (initialData) {
@@ -130,7 +162,8 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
         subLineId: initialData.subLineId || '',
         machineId: initialData.machineId || '',
         problemTypeId: initialData.problemTypeId || '',
-        priority: initialData.priority || '',
+        problemDescription: initialData.problemDescription || '',
+        priority: normalizePriority(initialData.priority),
         actionTaken: initialData.actionTaken || '',
         rootCause: initialData.rootCause || '',
         startTime: initialData.startTime || '',
@@ -140,6 +173,7 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
         majorContributionTime: initialData.majorContributionTime || '',
         attendById: initialData.attendById || '',
         closedById: initialData.closedById || '',
+        closedDate: initialData.closedDate ? String(initialData.closedDate).slice(0, 10) : todayIso,
         remark: initialData.remark || '',
         status: initialData.status || 'open',
         capaOperator: initialData.capaOperator || '',
@@ -206,8 +240,13 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
     calculateTotalTime();
   }, [formData.startTime, formData.finishTime]);
 
+  const selectedProblemTypeName = useMemo(() => {
+    const selected = problemTypes.find((problem: any) => problem.id === formData.problemTypeId);
+    return typeof selected?.name === "string" ? selected.name.trim().toUpperCase() : "";
+  }, [formData.problemTypeId, problemTypes]);
+
   const isCapaRequired =
-    formData.priority === 'High' && parseInt(formData.totalMinutes || '0') >= 45;
+    parseInt(formData.totalMinutes || "0") > 45 && selectedProblemTypeName === "B/D";
 
   const isCapaComplete = () => {
     if (!isCapaRequired) return true;
@@ -234,6 +273,7 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
     updated[index][field] = value;
     setProblemDescriptions(updated);
   };
+
 
   const addRootCause = () => {
     setRootCauses([...rootCauses, { rootCause: '', category: '', countermeasures: '', evidenceBefore: '', evidenceAfter: '' }]);
@@ -282,6 +322,16 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
       return;
     }
 
+    if (formData.date > todayIso) {
+      alert('Future date is not allowed.');
+      return;
+    }
+
+    if (!canUseBackDates && formData.date < minAllowedDateIso) {
+      alert('Past date can be selected up to last 3 days only.');
+      return;
+    }
+
     if (!formData.lineId || !formData.subLineId || !formData.machineId) {
       alert('Please select a line, sub line, and machine.');
       return;
@@ -312,6 +362,8 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
               id="date"
               type="date"
               value={formData.date}
+              min={minDate}
+              max={todayIso}
               onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
               required
               data-testid="input-date"
@@ -512,6 +564,29 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
               </SelectContent>
             </Select>
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="closedDate">Closed Date</Label>
+            <Input
+              id="closedDate"
+              type="date"
+              value={formData.closedDate}
+              onChange={(e) => setFormData({ ...formData, closedDate: e.target.value })}
+              data-testid="input-closed-date"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="problemDescription">Problem Description</Label>
+          <Textarea
+            id="problemDescription"
+            value={formData.problemDescription}
+            onChange={(e) => setFormData((prev) => ({ ...prev, problemDescription: e.target.value }))}
+            placeholder="Briefly describe the issue observed on the machine"
+            rows={3}
+            data-testid="textarea-problem-description"
+          />
         </div>
 
         <div className="space-y-2">
@@ -592,7 +667,7 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="capaMaintenance">Maintenance <span className="text-destructive">*</span></Label>
+                <Label htmlFor="capaMaintenance">Maintenance Attendant <span className="text-destructive">*</span></Label>
                 <Input
                   id="capaMaintenance"
                   value={formData.capaMaintenance}
@@ -714,13 +789,21 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
                     
                     <div className="space-y-2">
                       <Label htmlFor={`category-${index}`}>Category (4M)</Label>
-                      <Input
-                        id={`category-${index}`}
+                      <Select
                         value={problem.category}
-                        onChange={(e) => updateProblemDescription(index, 'category', e.target.value)}
-                        placeholder="Enter 4M category"
-                        data-testid={`input-category-${index}`}
-                      />
+                        onValueChange={(value) => updateProblemDescription(index, 'category', value)}
+                      >
+                        <SelectTrigger id={`category-${index}`} data-testid={`select-category-${index}`}>
+                          <SelectValue placeholder="Select 4M category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from(new Set([...(capaCategoryMaster.map((item) => item.name)), ...(problem.category ? [problem.category] : [])])).map((category) => (
+                            <SelectItem key={category} value={category}>
+                              {category}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -908,12 +991,12 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor={`paAction-${index}`}>Preventive Action</Label>
+                        <Label htmlFor={`paAction-${index}`}>Preventive Action Date</Label>
                         <Input
                           id={`paAction-${index}`}
+                          type="date"
                           value={action.action}
                           onChange={(e) => updatePreventiveAction(index, 'action', e.target.value)}
-                          placeholder="Action to be taken"
                           data-testid={`input-pa-action-${index}`}
                         />
                       </div>
@@ -989,7 +1072,11 @@ export default function BreakdownForm({ onSubmit, onCancel, initialData }: Break
               Cancel
             </Button>
           )}
-          <Button type="submit" data-testid="button-submit">
+          <Button
+            type="submit"
+            data-testid="button-submit"
+            disabled={isEditingClosedEntry && !canEditClosed}
+          >
             Submit
           </Button>
         </div>
