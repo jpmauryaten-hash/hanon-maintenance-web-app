@@ -9,6 +9,7 @@ import {
   CalendarDays,
   LogOut,
   ChevronRight,
+  Trash2,
 } from "lucide-react";
 import {
   Sidebar,
@@ -31,37 +32,33 @@ import { useLocation } from "wouter";
 import { useEffect, useMemo, useState } from "react";
 import { resolveApiUrl } from "@/lib/queryClient";
 
+const REPORT_LINKS = [
+  { title: "BD Report", url: "/reports" },
+  { title: "Annual PM Report", url: "/reports/annual-pm" },
+  { title: "Monthly Preventive M Report", url: "/reports/monthly-pm" },
+  { title: "Annual Predictive M Report", url: "/reports/annual-predictive" },
+  { title: "Monthly Predictive M Report", url: "/reports/monthly-predictive" },
+  { title: "Overhaul M Report", url: "/reports/overhaul" },
+  { title: "Long Pending Issue", url: "/reports/long-pending" },
+] as const;
+
 const menuItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Breakdown Tracker", url: "/tracker", icon: ClipboardList },
-  { title: "Reports", url: "/reports", icon: FileSpreadsheet },
-];
+  { title: "Reports", icon: FileSpreadsheet, children: REPORT_LINKS },
+] as const;
 
 const adminMenuItems = [
   { title: "Master Data", url: "/master", icon: Database },
   { title: "User Management", url: "/users", icon: Users },
+  { title: "Deleted Breakdowns", url: "/tracker/deleted", icon: Trash2 },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
-
-const MONTHLY_MONTHS = [
-  { key: "jan", label: "January" },
-  { key: "feb", label: "February" },
-  { key: "mar", label: "March" },
-  { key: "apr", label: "April" },
-  { key: "may", label: "May" },
-  { key: "jun", label: "June" },
-  { key: "jul", label: "July" },
-  { key: "aug", label: "August" },
-  { key: "sep", label: "September" },
-  { key: "oct", label: "October" },
-  { key: "nov", label: "November" },
-  { key: "dec", label: "December" },
-] as const;
 
 const maintenanceMenuItems = [
   { title: "Maintenance Planner", url: "/maintenance", icon: CalendarClock },
   { title: "Yearly Planner", url: "/yearly-planner", icon: ClipboardList },
-  { title: "Monthly Planner", icon: CalendarDays, children: MONTHLY_MONTHS },
+  { title: "Monthly Planner", url: "/yearly-planner/month", icon: CalendarDays },
 ] as const;
 
 interface AppSidebarProps {
@@ -72,17 +69,26 @@ interface AppSidebarProps {
 export default function AppSidebar({ role = "admin", userName = "Admin User" }: AppSidebarProps) {
   const [location, setLocation] = useLocation();
   const isMonthlyRoute = location.startsWith("/yearly-planner/month/");
-  const [monthlyMenuOpen, setMonthlyMenuOpen] = useState(isMonthlyRoute);
+  const isReportsRoute = location.startsWith("/reports");
+  const [reportsMenuOpen, setReportsMenuOpen] = useState(isReportsRoute);
   const currentYear = useMemo(() => new Date().getFullYear(), []);
+  const currentMonthKey = useMemo(() => {
+    const monthKeys = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    return monthKeys[new Date().getMonth()] ?? "jan";
+  }, []);
+  const monthlyPlannerUrl = useMemo(
+    () => `/yearly-planner/month/${currentMonthKey}?year=${currentYear}`,
+    [currentMonthKey, currentYear],
+  );
   
   const isAdmin = role === "admin";
   const canManageMaintenance = role === "admin" || role === "supervisor";
 
   useEffect(() => {
-    if (isMonthlyRoute) {
-      setMonthlyMenuOpen(true);
+    if (isReportsRoute) {
+      setReportsMenuOpen(true);
     }
-  }, [isMonthlyRoute]);
+  }, [isReportsRoute]);
 
   return (
     <Sidebar>
@@ -103,20 +109,69 @@ export default function AppSidebar({ role = "admin", userName = "Admin User" }: 
           <SidebarGroupLabel className="text-xs uppercase tracking-wider">Main Menu</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton 
-                    asChild 
-                    isActive={location === item.url}
-                    data-testid={`nav-${item.title.toLowerCase().replace(/\s/g, '-')}`}
-                  >
-                    <a href="#" onClick={(e) => { e.preventDefault(); setLocation(item.url); }}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </a>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {menuItems.map((item) => {
+                if (!("children" in item)) {
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={location === item.url}
+                        data-testid={`nav-${item.title.toLowerCase().replace(/\s/g, '-')}`}
+                      >
+                        <a href="#" onClick={(e) => { e.preventDefault(); setLocation(item.url); }}>
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </a>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                }
+
+                const isActive = isReportsRoute;
+
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      onClick={() => setReportsMenuOpen((prev) => !prev)}
+                      isActive={isActive}
+                      data-testid={`nav-${item.title.toLowerCase().replace(/\s/g, '-')}`}
+                    >
+                      <div className="flex w-full items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </div>
+                        <ChevronRight
+                          className={`h-4 w-4 transition-transform ${reportsMenuOpen ? "rotate-90" : ""}`}
+                        />
+                      </div>
+                    </SidebarMenuButton>
+
+                    {reportsMenuOpen ? (
+                      <SidebarMenuSub>
+                        {item.children.map((child) => {
+                          const childActive =
+                            child.url === "/reports"
+                              ? location === "/reports"
+                              : location.startsWith(child.url);
+                          const childTestId = child.title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+                          return (
+                            <SidebarMenuSubItem key={child.title}>
+                              <SidebarMenuSubButton
+                                isActive={childActive}
+                                onClick={() => setLocation(child.url)}
+                                data-testid={`nav-report-${childTestId}`}
+                              >
+                                <span>{child.title}</span>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          );
+                        })}
+                      </SidebarMenuSub>
+                    ) : null}
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -127,62 +182,24 @@ export default function AppSidebar({ role = "admin", userName = "Admin User" }: 
             <SidebarGroupContent>
               <SidebarMenu>
                 {maintenanceMenuItems.map((item) => {
-                  if (!("children" in item)) {
-                    return (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={location === item.url}
-                          data-testid={`nav-${item.title.toLowerCase().replace(/\s/g, '-')}`}
-                        >
-                          <a href="#" onClick={(e) => { e.preventDefault(); setLocation(item.url); }}>
-                            <item.icon className="h-4 w-4" />
-                            <span>{item.title}</span>
-                          </a>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  }
-
-                  const isActive = isMonthlyRoute;
-
                   return (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
-                        onClick={() => setMonthlyMenuOpen((prev) => !prev)}
-                        isActive={isActive}
+                        asChild
+                        isActive={item.title === "Monthly Planner" ? isMonthlyRoute : location === item.url}
                         data-testid={`nav-${item.title.toLowerCase().replace(/\s/g, '-')}`}
                       >
-                        <div className="flex w-full items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <item.icon className="h-4 w-4" />
-                            <span>{item.title}</span>
-                          </div>
-                          <ChevronRight
-                            className={`h-4 w-4 transition-transform ${monthlyMenuOpen ? "rotate-90" : ""}`}
-                          />
-                        </div>
+                        <a
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setLocation(item.title === "Monthly Planner" ? monthlyPlannerUrl : item.url);
+                          }}
+                        >
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </a>
                       </SidebarMenuButton>
-
-                      {monthlyMenuOpen ? (
-                        <SidebarMenuSub>
-                          {item.children.map((month) => {
-                            const monthUrl = `/yearly-planner/month/${month.key}?year=${currentYear}`;
-                            const monthActive = location === monthUrl;
-                            return (
-                              <SidebarMenuSubItem key={month.key}>
-                                <SidebarMenuSubButton
-                                  isActive={monthActive}
-                                  onClick={() => setLocation(monthUrl)}
-                                  data-testid={`nav-monthly-${month.key}`}
-                                >
-                                  <span>{month.label}</span>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                            );
-                          })}
-                        </SidebarMenuSub>
-                      ) : null}
                     </SidebarMenuItem>
                   );
                 })}

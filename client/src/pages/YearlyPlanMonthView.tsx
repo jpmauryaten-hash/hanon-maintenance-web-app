@@ -1,4 +1,4 @@
-import { Fragment, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, ReactNode, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
@@ -13,8 +13,9 @@ import { useLocation, useRoute } from "wouter";
 import { apiRequest, queryClient, resolveApiUrl } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Calendar, Download, Info } from "lucide-react";
+import { Calendar, Download, Info, Loader2, Upload } from "lucide-react";
 import { format } from "date-fns";
+import * as XLSX from "xlsx";
 
 const MAINTENANCE_FREQUENCIES = ["Monthly", "Quarterly", "Half Yearly", "Yearly"];
 const ALL_FREQUENCY_OPTION = "all";
@@ -103,6 +104,14 @@ interface MaintenanceRescheduleHistoryEntry {
   changedAt?: string | null;
   changedById?: string | null;
 }
+
+type MonthlyBulkScheduleImportRecord = {
+  machineName: string;
+  machineCode?: string;
+  scheduledDate: string;
+  shift: string;
+  emailRecipients?: string;
+};
 
 type RescheduledCellInfo = {
   reason: string | null;
@@ -354,29 +363,62 @@ const handleDownloadCompletionAttachment = useCallback(
   [toast],
 );
 
-const [location] = useLocation();
-const queryIndex = location.indexOf("?");
-const search = queryIndex === -1 ? "" : location.slice(queryIndex);
+const [location, setLocation] = useLocation();
+const search =
+  typeof window !== "undefined"
+    ? window.location.search
+    : (() => {
+        const queryIndex = location.indexOf("?");
+        return queryIndex === -1 ? "" : location.slice(queryIndex);
+      })();
 const searchParams = new URLSearchParams(search);
 const yearParam = searchParams.get("year");
 const parsedYear = yearParam ? Number.parseInt(yearParam, 10) : NaN;
-const effectiveYear = Number.isFinite(parsedYear) ? parsedYear : new Date().getFullYear();
+const [selectedYear, setSelectedYear] = useState<number>(() =>
+  Number.isFinite(parsedYear) ? parsedYear : new Date().getFullYear(),
+);
+const effectiveYear = selectedYear;
 
 const today = new Date();
 const todayYear = today.getFullYear();
 const todayMonth = today.getMonth();
 const todayDate = today.getDate();
+const fallbackMonthKey = YEARLY_PLAN_MONTHS[todayMonth]?.key ?? "jan";
+const selectedMonthKey = monthConfig?.key ?? fallbackMonthKey;
+
+const yearOptions = useMemo(() => {
+  const startYear = Math.min(todayYear - 5, effectiveYear - 2);
+  const endYear = Math.max(todayYear + 5, effectiveYear + 2);
+  const values: string[] = [];
+  for (let year = startYear; year <= endYear; year += 1) {
+    values.push(String(year));
+  }
+  return values;
+}, [effectiveYear, todayYear]);
+
+const handleMonthYearNavigation = useCallback(
+  (nextMonthKey: YearlyPlanMonthKey, nextYear: number) => {
+    const safeYear = Number.isFinite(nextYear) ? nextYear : todayYear;
+    setLocation(`/yearly-planner/month/${nextMonthKey}?year=${safeYear}`);
+  },
+  [setLocation, todayYear],
+);
+
+useEffect(() => {
+  const nextYear = Number.isFinite(parsedYear) ? parsedYear : new Date().getFullYear();
+  setSelectedYear((prev) => (prev === nextYear ? prev : nextYear));
+}, [parsedYear]);
 
   const { data: machines = [], isLoading: machinesLoading } = useQuery<any[]>({
     queryKey: ["/api/machines"],
   });
 
   const yearQueryKey =
-    Number.isFinite(parsedYear) && String(parsedYear).length === 4
-      ? `/api/yearly-maintenance-plans?year=${parsedYear}`
-      : `/api/yearly-maintenance-plans?year=${effectiveYear}`;
+    Number.isFinite(effectiveYear) && String(effectiveYear).length === 4
+      ? `/api/yearly-maintenance-plans?year=${effectiveYear}`
+      : `/api/yearly-maintenance-plans?year=${new Date().getFullYear()}`;
 
-  const { data: yearlyPlans = [], isLoading: plansLoading } = useQuery<YearlyMaintenancePlanApiRecord[]>({
+  const { data: yearlyPlans = [], isLoading: plansLoading, isFetching: plansFetching } = useQuery<YearlyMaintenancePlanApiRecord[]>({
     queryKey: [yearQueryKey],
   });
 
@@ -445,7 +487,7 @@ const todayDate = today.getDate();
     await planShiftMutation.mutateAsync({ planRecord: record });
   };
 
-const { data: maintenanceSchedules = [], isLoading: schedulesLoading } = useQuery<MaintenanceScheduleRecord[]>({
+const { data: maintenanceSchedules = [], isLoading: schedulesLoading, isFetching: schedulesFetching } = useQuery<MaintenanceScheduleRecord[]>({
   queryKey: ["/api/maintenance-plans"],
 });
 
@@ -454,6 +496,11 @@ const [formShift, setFormShift] = useState<string>(SHIFT_OPTIONS[0]);
 const [formMaintenanceType, setFormMaintenanceType] = useState<MaintenanceTypeOption>(DEFAULT_MAINTENANCE_TYPE);
 const [formDay, setFormDay] = useState<string>("");
 const [formReason, setFormReason] = useState<string>("");
+const bulkUploadInputRef = useRef<HTMLInputElement | null>(null);
+const completionFileInputRef = useRef<HTMLInputElement | null>(null);
+const [completionTarget, setCompletionTarget] = useState<MaintenanceScheduleRecord | null>(null);
+const [completionRemark, setCompletionRemark] = useState("");
+const [completionFile, setCompletionFile] = useState<File | null>(null);
 
 useEffect(() => {
   if (editingCell) {
@@ -463,6 +510,93 @@ useEffect(() => {
     setFormReason("");
   }
 }, [editingCell]);
+
+const bulkScheduleMutation = useMutation<any, Error, MonthlyBulkScheduleImportRecord[]>({
+  mutationFn: async (records) => {
+    const response = await apiRequest("POST", "/api/maintenance-plans/bulk", { records });
+    const raw = await response.text();
+    if (!raw.trim()) {
+      return null;
+    }
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  },
+  onSuccess: async (result) => {
+    await queryClient.invalidateQueries({ queryKey: ["/api/maintenance-plans"] });
+    await queryClient.refetchQueries({ queryKey: ["/api/maintenance-plans"], type: "all" });
+    const created = Number(result?.summary?.created ?? 0);
+    toast({
+      title: "Bulk schedule complete",
+      description: `Scheduled ${created} maintenance entr${created === 1 ? "y" : "ies"}.`,
+    });
+  },
+  onError: (error) => {
+    toast({
+      title: "Failed to import schedule",
+      description: error.message || "Unable to process the uploaded file.",
+      variant: "destructive",
+    });
+  },
+});
+
+const completeMutation = useMutation<
+  any,
+  Error,
+  { scheduleId: string; remark: string; file: File | null }
+>({
+  mutationFn: async ({ scheduleId, remark, file }) => {
+    const formData = new FormData();
+    formData.append("remark", remark);
+    if (file) {
+      formData.append("attachment", file);
+    }
+
+    const response = await fetch(resolveApiUrl(`/api/maintenance-plans/${scheduleId}/complete`), {
+      method: "POST",
+      body: formData,
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      const errorText = (await response.text()) || response.statusText;
+      throw new Error(errorText);
+    }
+
+    const raw = await response.text();
+    if (!raw.trim()) {
+      return null;
+    }
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  },
+  onSuccess: async () => {
+    await queryClient.invalidateQueries({ queryKey: ["/api/maintenance-plans"] });
+    await queryClient.refetchQueries({ queryKey: ["/api/maintenance-plans"], type: "all" });
+    setCompletionTarget(null);
+    setCompletionRemark("");
+    setCompletionFile(null);
+    if (completionFileInputRef.current) {
+      completionFileInputRef.current.value = "";
+    }
+    toast({
+      title: "Maintenance completed",
+      description: "Completion details recorded successfully.",
+    });
+  },
+  onError: (error) => {
+    toast({
+      title: "Failed to complete maintenance",
+      description: error.message,
+      variant: "destructive",
+    });
+  },
+});
 
 const scheduleMutation = useMutation<
   void,
@@ -545,13 +679,25 @@ const scheduleMutation = useMutation<
   },
 });
 
-const sortedMachines = useMemo(
-  () =>
-    [...machines]
-      .filter((machine) => machine && machine.id)
-      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""))),
-    [machines],
+const sortedMachines = useMemo(() => {
+  const deduped = new Map<string, any>();
+
+  for (const machine of machines) {
+    if (!machine || !machine.id) {
+      continue;
+    }
+    const nameKey = String(machine.name || "").trim().toLowerCase();
+    const planYearKey = resolvePmPlanYear(machine).trim().toLowerCase();
+    const key = `${nameKey}::${planYearKey}`;
+    if (!deduped.has(key)) {
+      deduped.set(key, machine);
+    }
+  }
+
+  return Array.from(deduped.values()).sort((a, b) =>
+    String(a.name || "").localeCompare(String(b.name || "")),
   );
+}, [machines]);
 
 const scheduledDaysByMachine = useMemo(() => {
   const map = new Map<string, Map<number, MaintenanceScheduleRecord>>();
@@ -1053,11 +1199,226 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
   };
 
   const selectedDayNumber = Number.parseInt(formDay, 10);
+  const isPlannerRefreshing = plansFetching || schedulesFetching;
   const noteRequired = Boolean(
     editingCell?.existingSchedule &&
       !Number.isNaN(selectedDayNumber) &&
       editingCell.existingScheduleDay !== selectedDayNumber,
   );
+
+  const handleExportMonthlyBulkTemplate = () => {
+    const monthLabel = monthConfig?.label ?? "MONTH";
+    const rows = filteredMachines.map((machine: any) => {
+      const latestSchedule = latestScheduleByMachine.get(machine.id) ?? null;
+      const maintenanceTypeValue = parseMaintenanceType(latestSchedule?.maintenanceType);
+      return {
+        "Machine Code": String(machine?.code ?? machine?.machineCode ?? machine?.machine_code ?? "").trim(),
+        "Machine Name": String(machine?.name ?? "").trim(),
+        "Maintenance Frequency": normalizeYearlyPlanFrequency(resolveMaintenanceFrequency(machine)) || "",
+        "PM Plan Year": resolvePmPlanYear(machine) || "",
+        "Maintenance Type": maintenanceTypeValue ?? "",
+        "Scheduled Date (YYYY-MM-DD)": "",
+        "Shift (A/B/C/G)": "",
+        "Email Recipients": "",
+        "Selected Month": monthLabel,
+        "Selected Year": String(effectiveYear),
+      };
+    });
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(
+      rows.length > 0
+        ? rows
+        : [
+            {
+              "Machine Code": "MC-001",
+              "Machine Name": "Example Machine",
+              "Maintenance Frequency": "Monthly",
+              "PM Plan Year": "Jan-Dec",
+              "Maintenance Type": "Preventive",
+              "Scheduled Date (YYYY-MM-DD)": "",
+              "Shift (A/B/C/G)": "",
+              "Email Recipients": "",
+              "Selected Month": monthLabel,
+              "Selected Year": String(effectiveYear),
+            },
+          ],
+    );
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, "MonthlyPlannerBulk");
+    XLSX.writeFile(workbook, `monthly_planner_${monthLabel.toLowerCase()}_${effectiveYear}.xlsx`);
+  };
+
+  const handleBulkUploadClick = () => {
+    bulkUploadInputRef.current?.click();
+  };
+
+  const handleBulkUploadFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      if (workbook.SheetNames.length === 0) {
+        throw new Error("The uploaded workbook does not contain any sheets.");
+      }
+
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
+        defval: "",
+        raw: false,
+      });
+
+      if (rows.length === 0) {
+        throw new Error("The uploaded sheet is empty.");
+      }
+
+      const headerKeys = Object.keys(rows[0] ?? {}).map((key) => key.trim());
+      const requiredHeaders = ["Machine Code", "Machine Name"];
+      const dateHeader = headerKeys.includes("Scheduled Date")
+        ? "Scheduled Date"
+        : headerKeys.includes("Scheduled Date (YYYY-MM-DD)")
+          ? "Scheduled Date (YYYY-MM-DD)"
+          : null;
+      const shiftHeader = headerKeys.includes("Shift")
+        ? "Shift"
+        : headerKeys.includes("Shift (A/B/C/G)")
+          ? "Shift (A/B/C/G)"
+          : null;
+
+      const missingHeaders = [
+        ...requiredHeaders.filter((header) => !headerKeys.includes(header)),
+        ...(dateHeader ? [] : ["Scheduled Date (YYYY-MM-DD)"]),
+        ...(shiftHeader ? [] : ["Shift (A/B/C/G)"]),
+      ];
+      if (missingHeaders.length > 0) {
+        throw new Error(`Missing required column(s): ${missingHeaders.join(", ")}`);
+      }
+
+      const monthNumber = monthIndex + 1;
+      const expectedPrefix = `${effectiveYear}-${String(monthNumber).padStart(2, "0")}-`;
+      const allowedShifts = new Set(SHIFT_OPTIONS);
+
+      const records: MonthlyBulkScheduleImportRecord[] = rows.map((row, rowIndex) => {
+        const machineCode = String(row["Machine Code"] ?? "").trim();
+        const machineName = String(row["Machine Name"] ?? "").trim();
+        const scheduledDate = String(row[dateHeader!] ?? "").trim();
+        const shift = String(row[shiftHeader!] ?? "").trim().toUpperCase();
+        const emailRecipients = String(row["Email Recipients"] ?? "").trim();
+
+        if (!machineCode && !machineName) {
+          throw new Error(`Row ${rowIndex + 2}: Machine Code or Machine Name is required.`);
+        }
+        if (!scheduledDate) {
+          throw new Error(`Row ${rowIndex + 2}: Scheduled Date is required.`);
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) {
+          throw new Error(`Row ${rowIndex + 2}: Scheduled Date must be in YYYY-MM-DD format.`);
+        }
+        if (!scheduledDate.startsWith(expectedPrefix)) {
+          throw new Error(
+            `Row ${rowIndex + 2}: Scheduled Date must be within ${monthConfig?.label} ${effectiveYear}.`,
+          );
+        }
+        const parsed = new Date(`${scheduledDate}T00:00:00`);
+        if (Number.isNaN(parsed.getTime())) {
+          throw new Error(`Row ${rowIndex + 2}: Scheduled Date is invalid.`);
+        }
+        if (!allowedShifts.has(shift as (typeof SHIFT_OPTIONS)[number])) {
+          throw new Error(`Row ${rowIndex + 2}: Shift must be one of A, B, C, or G.`);
+        }
+
+        return {
+          machineCode,
+          machineName,
+          scheduledDate,
+          shift,
+          emailRecipients: emailRecipients || undefined,
+        };
+      });
+
+      if (records.length === 0) {
+        throw new Error("No valid rows found for bulk scheduling.");
+      }
+
+      bulkScheduleMutation.mutate(records);
+    } catch (error) {
+      toast({
+        title: "Invalid monthly planner file",
+        description:
+          error instanceof Error && error.message
+            ? error.message
+            : "The uploaded Excel file does not contain valid data.",
+        variant: "destructive",
+      });
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  const handleOpenCompletionDialog = (schedule: MaintenanceScheduleRecord | null) => {
+    if (!schedule?.id) {
+      return;
+    }
+    setCompletionTarget(schedule);
+    setCompletionRemark(
+      typeof schedule.completionRemark === "string" ? schedule.completionRemark.trim() : "",
+    );
+    setCompletionFile(null);
+    if (completionFileInputRef.current) {
+      completionFileInputRef.current.value = "";
+    }
+  };
+
+  const handleCompletionDialogClose = () => {
+    if (completeMutation.isPending) {
+      return;
+    }
+    setCompletionTarget(null);
+    setCompletionRemark("");
+    setCompletionFile(null);
+    if (completionFileInputRef.current) {
+      completionFileInputRef.current.value = "";
+    }
+  };
+
+  const handleCompletionFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    setCompletionFile(file);
+  };
+
+  const handleCompletionSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!completionTarget?.id) {
+      return;
+    }
+    const trimmedRemark = completionRemark.trim();
+    if (!trimmedRemark) {
+      toast({
+        title: "Remark required",
+        description: "Please provide a remark describing the maintenance performed.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!completionFile) {
+      toast({
+        title: "Attachment required",
+        description: "Please attach the completion document before marking as completed.",
+        variant: "destructive",
+      });
+      return;
+    }
+    completeMutation.mutate({
+      scheduleId: completionTarget.id,
+      remark: trimmedRemark,
+      file: completionFile,
+    });
+  };
+
   return (
     <div className="space-y-6">
       <Card className="p-6 space-y-4">
@@ -1072,6 +1433,50 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
 
         <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-end md:gap-6">
           <div className="space-y-2">
+            <Label htmlFor="monthly-planner-year">Year</Label>
+            <Select
+              value={String(effectiveYear)}
+              onValueChange={(value) => {
+                const nextYear = Number.parseInt(value, 10);
+                if (Number.isFinite(nextYear)) {
+                  setSelectedYear(nextYear);
+                  handleMonthYearNavigation(selectedMonthKey, nextYear);
+                }
+              }}
+            >
+              <SelectTrigger id="monthly-planner-year" className="w-36">
+                <SelectValue placeholder="Select year" />
+              </SelectTrigger>
+              <SelectContent>
+                {yearOptions.map((year) => (
+                  <SelectItem key={year} value={year}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="monthly-planner-month">Month</Label>
+            <Select
+              value={selectedMonthKey}
+              onValueChange={(value) =>
+                handleMonthYearNavigation(value as YearlyPlanMonthKey, effectiveYear)
+              }
+            >
+              <SelectTrigger id="monthly-planner-month" className="w-40">
+                <SelectValue placeholder="Select month" />
+              </SelectTrigger>
+              <SelectContent>
+                {YEARLY_PLAN_MONTHS.map((month) => (
+                  <SelectItem key={month.key} value={month.key}>
+                    {month.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="filter-machine-name">Machine Name</Label>
             <Input
               id="filter-machine-name"
@@ -1080,6 +1485,14 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
               placeholder="Search machine name"
               className="w-48"
             />
+          </div>
+          <div className="flex items-center gap-2 pb-0.5 md:pb-2">
+            {isPlannerRefreshing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Refreshing...</span>
+              </>
+            ) : null}
           </div>
           <div className="space-y-2">
             <Label htmlFor="filter-frequency">Frequency</Label>
@@ -1138,6 +1551,32 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
               </SelectContent>
             </Select>
           </div>
+          <div className="flex flex-wrap items-end gap-2 md:ml-auto">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleExportMonthlyBulkTemplate}
+              disabled={filteredMachines.length === 0}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export Template
+            </Button>
+            <Button
+              type="button"
+              onClick={handleBulkUploadClick}
+              disabled={bulkScheduleMutation.isPending}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              {bulkScheduleMutation.isPending ? "Uploading..." : "Upload Excel"}
+            </Button>
+            <input
+              ref={bulkUploadInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={handleBulkUploadFileChange}
+            />
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -1146,6 +1585,7 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
               <TableRow>
                 <TableHead>S. No.</TableHead>
                 <TableHead>Frequency</TableHead>
+                <TableHead>Machine Code</TableHead>
                 <TableHead>Machine Name</TableHead>
                 <TableHead>PM Plan Year</TableHead>
                 <TableHead>Maintenance Type</TableHead>
@@ -1163,13 +1603,14 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
             <TableBody>
               {filteredMachines.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={monthDays.length + 6} className="text-center text-muted-foreground">
+                  <TableCell colSpan={monthDays.length + 7} className="text-center text-muted-foreground">
                     No machines scheduled for this month.
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredMachines.map((machine, index) => {
                   const frequency = normalizeYearlyPlanFrequency(resolveMaintenanceFrequency(machine));
+                  const machineCode = String(machine?.code ?? machine?.machineCode ?? machine?.machine_code ?? "").trim();
                   
                   const planValues = planMonthValues.get(machine.id) ?? new Map<YearlyPlanMonthKey, string>();
                   const rawPlanValue = (planValues.get(monthConfig.key) ?? "").trim();
@@ -1215,7 +1656,8 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
                     <Fragment key={machine.id}>
                       <TableRow>
                         <TableCell rowSpan={2}>{index + 1}</TableCell>
-                        <TableCell rowSpan={2}>{frequencyBadges[frequency] ?? (frequency || "-")}</TableCell>
+                        <TableCell rowSpan={2}>{frequency || "-"}</TableCell>
+                        <TableCell rowSpan={2} className="font-mono">{machineCode || "-"}</TableCell>
                         <TableCell rowSpan={2}>{machine.name}</TableCell>
                         <TableCell rowSpan={2}>{resolvePmPlanYear(machine) || "-"}</TableCell>
                         <TableCell rowSpan={2}>{maintenanceTypeLabel}</TableCell>
@@ -1421,7 +1863,19 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
                           } else if (shouldHighlightActual) {
                             const shiftLabel = recordShift || scheduledShift || "";
                             actualCellClass = "text-center bg-yellow-200 font-semibold text-black";
-                            actualCellContent = shiftLabel || "";
+                            actualCellContent =
+                              recordForDay && scheduleStatus !== "completed" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenCompletionDialog(recordForDay)}
+                                  className="w-full rounded px-2 py-1 text-center underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-ring"
+                                  title="Mark maintenance as completed"
+                                >
+                                  {shiftLabel || ""}
+                                </button>
+                              ) : (
+                                shiftLabel || ""
+                              );
                           } else if (recordForDay) {
                             actualCellContent = recordShift || scheduledShift || "";
                           }
@@ -1557,6 +2011,64 @@ const monthIndex = monthConfig ? YEARLY_PLAN_MONTHS.findIndex((month) => month.k
               {scheduleMutation.isPending ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(completionTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCompletionDialogClose();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Complete Maintenance</DialogTitle>
+            <DialogDescription>
+              Provide completion details for the selected maintenance schedule.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={handleCompletionSubmit}>
+            <div className="space-y-2">
+              <Label htmlFor="monthly-completion-remark">Completion Remark</Label>
+              <Textarea
+                id="monthly-completion-remark"
+                value={completionRemark}
+                onChange={(event) => setCompletionRemark(event.target.value)}
+                placeholder="Describe the maintenance work completed"
+                rows={3}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="monthly-completion-file">Completion Attachment</Label>
+              <Input
+                ref={completionFileInputRef}
+                id="monthly-completion-file"
+                type="file"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                onChange={handleCompletionFileChange}
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Accepted formats: PDF, DOC, DOCX, XLS, XLSX, JPG, JPEG, PNG
+              </p>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCompletionDialogClose}
+                disabled={completeMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={completeMutation.isPending}>
+                {completeMutation.isPending ? "Saving..." : "Mark Completed"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

@@ -276,6 +276,28 @@
     @apply hidden;
   }
 
+  /* Dark mode: make native calendar/time picker icons white and larger */
+  .dark input[type="date"]::-webkit-calendar-picker-indicator,
+  .dark input[type="time"]::-webkit-calendar-picker-indicator,
+  .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+  .dark input[type="month"]::-webkit-calendar-picker-indicator,
+  .dark input[type="week"]::-webkit-calendar-picker-indicator {
+    filter: brightness(0) invert(1);
+    opacity: 1;
+    transform: scale(1.25);
+    transform-origin: center;
+    cursor: pointer;
+  }
+
+  /* Dark mode: make calendar/clock lucide icons white and slightly larger */
+  .dark [data-lucide*="calendar"],
+  .dark [data-lucide*="clock"] {
+    color: hsl(var(--foreground)) !important;
+    stroke: currentColor !important;
+    width: 1.125rem !important;
+    height: 1.125rem !important;
+  }
+
   /* Placeholder styling for contentEditable div */
   [contenteditable][data-placeholder]:empty::before {
     content: attr(data-placeholder);

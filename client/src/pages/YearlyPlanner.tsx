@@ -403,7 +403,7 @@ export default function YearlyPlanner(): JSX.Element {
     const planYearFilter = filters.planYear;
     const typeFilter = filters.machineType;
 
-    return machines.filter((machine) => {
+    const filtered = machines.filter((machine) => {
       const machineName = (machine.name || "").toLowerCase();
       if (nameFilter && !machineName.includes(nameFilter)) {
         return false;
@@ -440,6 +440,22 @@ export default function YearlyPlanner(): JSX.Element {
       }
 
       return true;
+    });
+
+    const dedupedMap = new Map<string, typeof machines[number]>();
+    for (const machine of filtered) {
+      const nameKey = (machine.name || "").trim().toLowerCase();
+      const planYearKey = (resolvePlanYear(machine) || "").trim().toLowerCase();
+      const key = `${nameKey}::${planYearKey}`;
+      if (!dedupedMap.has(key)) {
+        dedupedMap.set(key, machine);
+      }
+    }
+
+    return Array.from(dedupedMap.values()).sort((a, b) => {
+      const nameA = (a.name || "").toLowerCase();
+      const nameB = (b.name || "").toLowerCase();
+      return nameA.localeCompare(nameB);
     });
   }, [filters, machines]);
 

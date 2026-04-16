@@ -9,6 +9,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
 import BreakdownTracker from "@/pages/BreakdownTracker";
+import DeletedBreakdowns from "@/pages/DeletedBreakdowns";
 import Reports from "@/pages/Reports";
 import MasterData from "@/pages/MasterData";
 import MaintenancePlanner from "@/pages/MaintenancePlanner";
@@ -60,6 +61,8 @@ function AuthenticatedApp() {
             <Switch>
               <Route path="/" component={Dashboard} />
               <Route path="/tracker" component={BreakdownTracker} />
+              <Route path="/tracker/deleted" component={DeletedBreakdowns} />
+              <Route path="/reports/:view" component={Reports} />
               <Route path="/reports" component={Reports} />
               <Route path="/master" component={MasterData} />
               <Route path="/maintenance" component={MaintenancePlanner} />

@@ -1,7 +1,8 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, Eye } from "lucide-react";
+import { Edit, RotateCcw, Trash2, Eye } from "lucide-react";
 import BreakdownStatusBadge from "./BreakdownStatusBadge";
+import { format, parseISO } from "date-fns";
 
 interface Breakdown {
   id: string;
@@ -20,6 +21,7 @@ interface BreakdownTableProps {
   onView?: (id: string) => void;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
+  onRestore?: (id: string) => void;
   canEdit?: boolean;
 }
 
@@ -28,8 +30,19 @@ export default function BreakdownTable({
   onView,
   onEdit, 
   onDelete,
+  onRestore,
   canEdit = false 
 }: BreakdownTableProps) {
+  const showActions = canEdit || !!onRestore;
+
+  const formatDate = (value: string) => {
+    try {
+      return format(parseISO(value), "dd-MM-yyyy");
+    } catch {
+      return value;
+    }
+  };
+
   return (
     <div className="rounded-md border">
       <Table>
@@ -43,7 +56,7 @@ export default function BreakdownTable({
             <TableHead className="text-xs font-semibold uppercase text-right">Downtime (min)</TableHead>
             <TableHead className="text-xs font-semibold uppercase">Attended By</TableHead>
             <TableHead className="text-xs font-semibold uppercase">Status</TableHead>
-            {canEdit && <TableHead className="text-xs font-semibold uppercase">Actions</TableHead>}
+            {showActions && <TableHead className="text-xs font-semibold uppercase">Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -53,7 +66,7 @@ export default function BreakdownTable({
               className={index % 2 === 0 ? 'bg-background' : 'bg-muted/20'}
               data-testid={`row-breakdown-${breakdown.id}`}
             >
-              <TableCell className="font-mono text-sm">{breakdown.date}</TableCell>
+              <TableCell className="font-mono text-sm">{formatDate(breakdown.date)}</TableCell>
               <TableCell>
                 <span className={`px-2 py-1 rounded text-xs font-semibold ${
                   breakdown.shift === 'A' ? 'bg-primary/10 text-primary' :
@@ -71,33 +84,49 @@ export default function BreakdownTable({
               <TableCell>
                 <BreakdownStatusBadge status={breakdown.status} />
               </TableCell>
-              {canEdit && (
+              {showActions && (
                 <TableCell>
                   <div className="flex gap-2">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => onView?.(breakdown.id)}
-                      data-testid={`button-view-${breakdown.id}`}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => onEdit?.(breakdown.id)}
-                      data-testid={`button-edit-${breakdown.id}`}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => onDelete?.(breakdown.id)}
-                      data-testid={`button-delete-${breakdown.id}`}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    {onView && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => onView?.(breakdown.id)}
+                        data-testid={`button-view-${breakdown.id}`}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {onEdit && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => onEdit?.(breakdown.id)}
+                        data-testid={`button-edit-${breakdown.id}`}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {onDelete && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => onDelete?.(breakdown.id)}
+                        data-testid={`button-delete-${breakdown.id}`}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                    {onRestore && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => onRestore?.(breakdown.id)}
+                        data-testid={`button-restore-${breakdown.id}`}
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               )}

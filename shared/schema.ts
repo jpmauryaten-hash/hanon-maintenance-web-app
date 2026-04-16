@@ -17,18 +17,30 @@ export const employees = pgTable("employees", {
   name: text("name").notNull(),
   department: text("department"),
   role: text("role"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at"),
+  updatedBy: varchar("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at"),
 });
 
 export const lines = pgTable("lines", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
   description: text("description"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at"),
+  updatedBy: varchar("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at"),
 });
 
 export const subLines = pgTable("sub_lines", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   lineId: varchar("line_id").references(() => lines.id),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at"),
+  updatedBy: varchar("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at"),
 });
 
 export const machines = pgTable("machines", {
@@ -41,12 +53,29 @@ export const machines = pgTable("machines", {
   maintenanceFrequency: text("maintenance_frequency"),
   pmPlanYear: text("pm_plan_year"),
   uptime: integer("uptime"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at"),
+  updatedBy: varchar("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at"),
 });
 
 export const problemTypes = pgTable("problem_types", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
   description: text("description"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at"),
+  updatedBy: varchar("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at"),
+});
+
+export const capaCategories = pgTable("capa_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedBy: varchar("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at"),
 });
 
 export const maintenanceSchedules = pgTable("maintenance_schedules", {
@@ -57,6 +86,7 @@ export const maintenanceSchedules = pgTable("maintenance_schedules", {
   shift: text("shift"),
   status: text("status").notNull().default("scheduled"),
   maintenanceFrequency: text("maintenance_frequency"),
+  maintenanceType: text("maintenance_type"),
   notes: text("notes"),
   emailRecipients: text("email_recipients"),
   emailTemplate: text("email_template"),
@@ -119,6 +149,7 @@ export const breakdowns = pgTable("breakdowns", {
   subLineId: varchar("sub_line_id").references(() => subLines.id),
   machineId: varchar("machine_id").notNull().references(() => machines.id),
   problemTypeId: varchar("problem_type_id").notNull().references(() => problemTypes.id),
+  problemDescription: text("problem_description"),
   priority: text("priority").notNull(), // High, Medium, Low
   actionTaken: text("action_taken"),
   rootCause: text("root_cause"),
@@ -129,6 +160,7 @@ export const breakdowns = pgTable("breakdowns", {
   majorContributionTime: integer("major_contribution_time"),
   attendById: varchar("attend_by_id").notNull().references(() => employees.id),
   closedById: varchar("closed_by_id").references(() => employees.id),
+  closedDate: text("closed_date"),
   remark: text("remark"),
   status: text("status").notNull().default("open"), // open, closed, pending
   // CAPA fields - Five Why Analysis (activated when priority=High and totalMinutes>=45)
@@ -147,6 +179,7 @@ export const breakdowns = pgTable("breakdowns", {
   createdById: varchar("created_by_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  deletedAt: timestamp("deleted_at"),
 });
 
 // Insert schemas
@@ -193,6 +226,10 @@ export const insertProblemTypeSchema = createInsertSchema(problemTypes).omit({
   id: true,
 });
 
+export const insertCapaCategorySchema = createInsertSchema(capaCategories).omit({
+  id: true,
+});
+
 export const insertBreakdownSchema = createInsertSchema(breakdowns).omit({
   id: true,
   createdAt: true,
@@ -225,6 +262,9 @@ export type MaintenanceScheduleHistory = typeof maintenanceScheduleHistory.$infe
 
 export type ProblemType = typeof problemTypes.$inferSelect;
 export type InsertProblemType = z.infer<typeof insertProblemTypeSchema>;
+
+export type CapaCategory = typeof capaCategories.$inferSelect;
+export type InsertCapaCategory = z.infer<typeof insertCapaCategorySchema>;
 
 export type Breakdown = typeof breakdowns.$inferSelect;
 export type InsertBreakdown = z.infer<typeof insertBreakdownSchema>;

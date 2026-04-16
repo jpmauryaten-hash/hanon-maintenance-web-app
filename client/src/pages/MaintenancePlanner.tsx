@@ -31,7 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Check, ChevronsUpDown, Download, Upload } from "lucide-react";
+import { Check, ChevronsUpDown, Download, Trash2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient, resolveApiUrl } from "@/lib/queryClient";
@@ -259,6 +259,7 @@ export default function MaintenancePlanner() {
   const { toast } = useToast();
   const { user } = useAuth();
   const userRole = (user?.role || "").toLowerCase();
+  const isAdmin = userRole === "admin";
   const canDeleteChecksheet = userRole === "admin";
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form, setForm] = useState(() => ({ ...defaultFormState }));
@@ -419,6 +420,36 @@ useEffect(() => {
     onError: (error: Error) => {
       toast({
         title: "Failed to complete maintenance",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteScheduleMutation = useMutation({
+    mutationFn: async (scheduleId: string) => {
+      const response = await fetch(resolveApiUrl(`/api/maintenance-plans/${scheduleId}`), {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const errorText = (await response.text()) || response.statusText;
+        throw new Error(errorText);
+      }
+
+      return await parseJsonOrThrow(response);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/maintenance-plans"] });
+      toast({
+        title: "Maintenance plan deleted",
+        description: "The scheduled maintenance entry has been removed.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to delete maintenance plan",
         description: error.message,
         variant: "destructive",
       });
@@ -711,6 +742,34 @@ useEffect(() => {
     }
   };
 
+  const handleDeleteSchedule = (schedule: Schedule) => {
+    if (userRole !== "admin") {
+      toast({
+        title: "Insufficient permissions",
+        description: "Only administrators can delete scheduled maintenance.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if ((schedule.status || "").toLowerCase() === "completed") {
+      toast({
+        title: "Not allowed",
+        description: "Completed maintenance cannot be deleted.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const label = schedule.machineName?.trim() || schedule.machineCode?.trim() || "this schedule";
+    const confirmed = window.confirm(`Delete scheduled maintenance for ${label}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    deleteScheduleMutation.mutate(schedule.id);
+  };
+
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!form.machineId || !form.scheduledDate) {
@@ -862,7 +921,6 @@ useEffect(() => {
       return aDate - bDate;
     });
   }, [filteredSchedules]);
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -1132,10 +1190,10 @@ useEffect(() => {
               <span className="text-xs font-medium uppercase text-muted-foreground">Status</span>
               <Select value={statusFilter} onValueChange={setStatusFilter} data-testid="select-status-filter">
                 <SelectTrigger className="w-full md:w-48">
-                  <SelectValue placeholder="All statuses" />
+                  <SelectValue placeholder="All status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="all">All status</SelectItem>
                   {statusOptions.map((status) => (
                     <SelectItem key={status} value={status}>
                       {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -1239,6 +1297,7 @@ useEffect(() => {
                   typeof schedule.completionAttachmentPath === "string" &&
                   schedule.completionAttachmentPath.trim().length > 0;
                 const maintenanceTypeLabel = normalizeMaintenanceType(schedule.maintenanceType) ?? "-";
+                const isCompleted = (schedule.status || "").toLowerCase() === "completed";
 
                 return (
                   <TableRow key={schedule.id} data-testid={`row-maintenance-${schedule.id}`}>
@@ -1318,12 +1377,24 @@ useEffect(() => {
                         size="sm"
                         variant="outline"
                         onClick={() => handleOpenCompletionDialog(schedule)}
-                        disabled={schedule.status === "completed" || completeMutation.isPending}
+                        disabled={isCompleted || completeMutation.isPending}
                         data-testid={`button-complete-maintenance-${schedule.id}`}
                       >
                         Mark Completed
                       </Button>
-                      {schedule.status === "completed" && hasCompletionAttachment ? (
+                      {isAdmin && !isCompleted ? (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleDeleteSchedule(schedule)}
+                          disabled={deleteScheduleMutation.isPending}
+                          data-testid={`button-delete-maintenance-${schedule.id}`}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete Schedule
+                        </Button>
+                      ) : null}
+                      {isCompleted && hasCompletionAttachment ? (
                         <Button
                           size="sm"
                           variant="secondary"

@@ -5,10 +5,16 @@ import { setupVite, serveStatic, log } from "./vite";
 import { seedDatabase } from "./seed";
 import {
   ensureMaintenanceScheduleShiftColumn,
+  ensureMaintenanceScheduleTypeColumn,
   ensureMaintenanceYearlyPlansTable,
   ensureMaintenanceScheduleChecksheetColumn,
   ensureMaintenanceScheduleCompletionColumns,
   ensureMaintenanceScheduleHistoryTable,
+  ensureBreakdownsProblemDescriptionColumn,
+  ensureBreakdownsDeletedAtColumn,
+  ensureBreakdownsClosedDateColumn,
+  ensureMasterDataAuditColumns,
+  ensureCapaCategoriesTable,
 } from "./ensureTables";
 import { setupAuth } from "./auth";
 
@@ -65,6 +71,11 @@ app.use((req, res, next) => {
     throw error;
   });
 
+  await ensureMaintenanceScheduleTypeColumn().catch((error) => {
+    console.error("Failed to ensure maintenance_schedules maintenance_type column:", error);
+    throw error;
+  });
+
   await ensureMaintenanceScheduleChecksheetColumn().catch((error) => {
     console.error("Failed to ensure maintenance_schedules checksheet column:", error);
     throw error;
@@ -77,6 +88,31 @@ app.use((req, res, next) => {
 
   await ensureMaintenanceScheduleHistoryTable().catch((error) => {
     console.error("Failed to ensure maintenance_schedule_history table:", error);
+    throw error;
+  });
+
+  await ensureBreakdownsProblemDescriptionColumn().catch((error) => {
+    console.error("Failed to ensure breakdowns problem_description column:", error);
+    throw error;
+  });
+
+  await ensureBreakdownsDeletedAtColumn().catch((error) => {
+    console.error("Failed to ensure breakdowns deleted_at column:", error);
+    throw error;
+  });
+
+  await ensureBreakdownsClosedDateColumn().catch((error) => {
+    console.error("Failed to ensure breakdowns closed_date column:", error);
+    throw error;
+  });
+
+  await ensureMasterDataAuditColumns().catch((error) => {
+    console.error("Failed to ensure master data audit columns:", error);
+    throw error;
+  });
+
+  await ensureCapaCategoriesTable().catch((error) => {
+    console.error("Failed to ensure CAPA categories table:", error);
     throw error;
   });
 

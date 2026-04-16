@@ -27,8 +27,23 @@ export const resolveApiUrl = (input: string): string => {
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    const text = await res.text();
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      try {
+        const json = JSON.parse(text || "{}");
+        const message =
+          typeof json?.error === "string"
+            ? json.error
+            : typeof json?.message === "string"
+              ? json.message
+              : text;
+        throw new Error(`${res.status}: ${message}`);
+      } catch {
+        // fall through to text error below
+      }
+    }
+    throw new Error(`${res.status}: ${text || res.statusText}`);
   }
 }
 
